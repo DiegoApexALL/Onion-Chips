@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { compatibleUnits, itemCost, money, pct, recipeCost } from '../lib/cost'
+import ConfirmButton from '../ConfirmButton'
 import { store } from '../lib/store'
 import type { Ingredient, Recipe, RecipeItem } from '../lib/types'
 
@@ -19,7 +20,6 @@ export default function Recipes({ ingredients, recipes, reload, onError }: Props
   const [draft, setDraft] = useState<Draft | null>(null)
 
   async function remove(r: Recipe) {
-    if (!confirm(`Excluir a receita "${r.name}"?`)) return
     try {
       await store.remove('recipes', r.id)
       await reload()
@@ -80,7 +80,7 @@ export default function Recipes({ ingredients, recipes, reload, onError }: Props
               <div className="actions">
                 <button className="ghost small" onClick={() => setDraft(structuredClone(r))}>Editar</button>
                 <button className="ghost small" onClick={() => setDraft({ ...structuredClone(r), id: undefined, name: `${r.name} (cópia)` })}>Duplicar</button>
-                <button className="danger small" onClick={() => remove(r)}>Excluir</button>
+                <ConfirmButton onConfirm={() => remove(r)} />
               </div>
             </article>
           )

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { costPerBase, money, money4, UNITS } from '../lib/cost'
+import ConfirmButton from '../ConfirmButton'
 import { store } from '../lib/store'
 import type { Ingredient, Recipe, Unit } from '../lib/types'
 
@@ -46,15 +47,17 @@ export default function Ingredients({ ingredients, recipes, reload, onError }: P
   }
 
   async function remove(i: Ingredient) {
-    const used = recipes.filter((r) => r.items.some((it) => it.ingredient_id === i.id)).map((r) => r.name)
-    const warn = used.length ? `\n\nEle é usado em: ${used.join(', ')}.` : ''
-    if (!confirm(`Excluir "${i.name}"?${warn}`)) return
     try {
       await store.remove('ingredients', i.id)
       await reload()
     } catch (err) {
       onError((err as Error).message)
     }
+  }
+
+  function usedIn(i: Ingredient) {
+    const used = recipes.filter((r) => r.items.some((it) => it.ingredient_id === i.id)).map((r) => r.name)
+    return used.length ? `Usado em: ${used.join(', ')}` : undefined
   }
 
   return (
@@ -113,7 +116,7 @@ export default function Ingredients({ ingredients, recipes, reload, onError }: P
                     <td className="num">{money4(costPerBase(i))} / {BASE_LABEL[i.unit]}</td>
                     <td className="row-actions">
                       <button className="ghost small" onClick={() => edit(i)}>Editar</button>
-                      <button className="danger small" onClick={() => remove(i)}>Excluir</button>
+                      <ConfirmButton onConfirm={() => remove(i)} title={usedIn(i)} />
                     </td>
                   </tr>
                 ))}

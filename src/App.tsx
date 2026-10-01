@@ -72,6 +72,11 @@ export default function App() {
       </header>
       <main className="content">
         {error && <div className="alert">Erro: {error}</div>}
+        {!supabase && (
+          <div className="hint">
+            Modo de teste: os dados ficam salvos só neste navegador. Os itens marcados "(exemplo)" podem ser editados ou excluídos.
+          </div>
+        )}
         {tab === 'dashboard' && <Dashboard ingredients={ingredients} recipes={recipes} onGo={setTab} />}
         {tab === 'ingredients' && (
           <Ingredients ingredients={ingredients} recipes={recipes} reload={reload} onError={setError} />

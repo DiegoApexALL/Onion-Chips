@@ -42,10 +42,61 @@ const supabaseStore = (sb: SupabaseClient): Store => ({
 })
 
 // Modo local (sem Supabase configurado): salva no navegador
+const memory = new Map<string, string>()
+function read(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return memory.get(key) ?? null
+  }
+}
+function write(key: string, value: string) {
+  memory.set(key, value)
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* armazenamento bloqueado: fica só na memória */
+  }
+}
+
+// Dados de exemplo na primeira visita, para o app não abrir vazio
+function seedExamples() {
+  if (read('onion-cost:seeded')) return
+  const ing = (name: string, unit: Ingredient['unit'], package_price: number, package_qty: number): Ingredient => ({
+    id: crypto.randomUUID(), name, unit, package_price, package_qty,
+  })
+  const cebola = ing('Cebola (exemplo)', 'kg', 5.99, 1)
+  const oleo = ing('Óleo de girassol (exemplo)', 'l', 9.5, 0.9)
+  const farinha = ing('Farinha de trigo (exemplo)', 'kg', 4.8, 1)
+  const sal = ing('Sal (exemplo)', 'kg', 2.5, 1)
+  const pacote = ing('Embalagem 100g (exemplo)', 'un', 35, 100)
+  const recipe: Recipe = {
+    id: crypto.randomUUID(),
+    name: 'Onion chips 100g (exemplo)',
+    yield_qty: 12,
+    yield_label: 'pacotes',
+    extra_costs: 6,
+    margin_pct: 120,
+    sale_price: 9.9,
+    notes: 'Receita de exemplo. Edite ou exclua à vontade.',
+    items: [
+      { ingredient_id: cebola.id, quantity: 3, unit: 'kg' },
+      { ingredient_id: oleo.id, quantity: 600, unit: 'ml' },
+      { ingredient_id: farinha.id, quantity: 400, unit: 'g' },
+      { ingredient_id: sal.id, quantity: 30, unit: 'g' },
+      { ingredient_id: pacote.id, quantity: 12, unit: 'un' },
+    ],
+  }
+  write('onion-cost:ingredients', JSON.stringify([cebola, oleo, farinha, sal, pacote]))
+  write('onion-cost:recipes', JSON.stringify([recipe]))
+  write('onion-cost:seeded', '1')
+}
+
 const localStore: Store = {
   async list(table) {
+    seedExamples()
     try {
-      const rows = JSON.parse(localStorage.getItem(`onion-cost:${table}`) || '[]')
+      const rows = JSON.parse(read(`onion-cost:${table}`) || '[]')
       return rows.sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name))
     } catch {
       return []
@@ -57,12 +108,12 @@ const localStore: Store = {
     const i = rows.findIndex((r) => r.id === saved.id)
     if (i >= 0) rows[i] = saved
     else rows.push(saved)
-    localStorage.setItem(`onion-cost:${table}`, JSON.stringify(rows))
+    write(`onion-cost:${table}`, JSON.stringify(rows))
     return saved as never
   },
   async remove(table, id) {
     const rows = (await localStore.list(table)) as { id: string }[]
-    localStorage.setItem(`onion-cost:${table}`, JSON.stringify(rows.filter((r) => r.id !== id)))
+    write(`onion-cost:${table}`, JSON.stringify(rows.filter((r) => r.id !== id)))
   },
 }
 
