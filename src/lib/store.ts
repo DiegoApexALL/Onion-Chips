@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { Ingredient, Recipe } from './types'
+import { DEFAULT_SETTINGS, type Ingredient, type Recipe, type Settings } from './types'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -13,6 +13,14 @@ export interface Store {
   list<T extends Table>(table: T): Promise<Row<T>[]>
   save<T extends Table>(table: T, row: Omit<Row<T>, 'id'> & { id?: string }): Promise<Row<T>>
   remove(table: Table, id: string): Promise<void>
+  getSettings(): Promise<Settings>
+  saveSettings(settings: Settings): Promise<void>
+}
+
+function toSettings(raw: Record<string, unknown> | null | undefined): Settings {
+  const min = Number(raw?.cmv_min)
+  const max = Number(raw?.cmv_max)
+  return Number.isFinite(min) && Number.isFinite(max) && raw ? { cmv_min: min, cmv_max: max } : { ...DEFAULT_SETTINGS }
 }
 
 const NUMERIC = ['package_price', 'package_qty', 'yield_qty', 'extra_costs', 'margin_pct', 'sale_price']
@@ -37,6 +45,16 @@ const supabaseStore = (sb: SupabaseClient): Store => ({
   },
   async remove(table, id) {
     const { error } = await sb.from(table).delete().eq('id', id)
+    if (error) throw error
+  },
+  async getSettings() {
+    const { data, error } = await sb.from('settings').select('cmv_min, cmv_max').maybeSingle()
+    if (error) throw error
+    return toSettings(data)
+  },
+  async saveSettings(settings) {
+    const { data: auth } = await sb.auth.getUser()
+    const { error } = await sb.from('settings').upsert({ user_id: auth.user?.id, ...settings })
     if (error) throw error
   },
 })
@@ -81,6 +99,16 @@ const localStore: Store = {
     const rows = (await localStore.list(table)) as { id: string }[]
     write(`onion-cost:${table}`, JSON.stringify(rows.filter((r) => r.id !== id)))
   },
+  async getSettings() {
+    try {
+      return toSettings(JSON.parse(read('onion-cost:settings') || 'null'))
+    } catch {
+      return { ...DEFAULT_SETTINGS }
+    }
+  },
+  async saveSettings(settings) {
+    write('onion-cost:settings', JSON.stringify(settings))
+  },
 }
 
 /** Banco na nuvem da página publicada no Claude (dados privados de cada pessoa). */
@@ -99,12 +127,12 @@ async function claudeStore(): Promise<Store | null> {
   const [db, user] = await Promise.all([claude.use('db'), claude.use('user')])
   const uid = await user?.id()
   if (!db || !uid) return null
-  const ref = (table: Table) => db.doc(`data/users/${uid}/${table}`)
+  const ref = (table: Table | 'settings') => db.doc(`data/users/${uid}/${table}`)
   const read = async (table: Table) => {
     const snap = await ref(table).get()
     return ((snap.exists && (snap.data()?.rows as { id: string; name: string }[])) || []).slice()
   }
-  const write = (table: Table, rows: unknown[]) => ref(table).set({ rows }).catch((e: { code?: string; message?: string }) => {
+  const write = (table: Table | 'settings', body: unknown[] | Settings) => ref(table).set(Array.isArray(body) ? { rows: body } : { ...body }).catch((e: { code?: string; message?: string }) => {
     throw new Error(e?.code === 'invalid_argument'
       ? 'Você só tem permissão para ver esta página, não para salvar.'
       : `Não foi possível salvar (${e?.code ?? e?.message ?? 'erro'}). Tente de novo.`)
@@ -125,6 +153,13 @@ async function claudeStore(): Promise<Store | null> {
     },
     async remove(table, id) {
       await write(table, (await read(table)).filter((r) => r.id !== id))
+    },
+    async getSettings() {
+      const snap = await ref('settings').get()
+      return toSettings(snap.exists ? snap.data() : null)
+    },
+    async saveSettings(settings) {
+      await write('settings', settings)
     },
   }
 }
@@ -151,6 +186,8 @@ export const store: Store = {
   list: (table) => active.list(table),
   save: (table, row) => active.save(table, row),
   remove: (table, id) => active.remove(table, id),
+  getSettings: () => active.getSettings(),
+  saveSettings: (settings) => active.saveSettings(settings),
 }
 
 /** Cria ingredientes e uma receita de exemplo. */

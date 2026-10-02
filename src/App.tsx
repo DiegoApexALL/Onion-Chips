@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { initStore, loadExamples, store, supabase, type StoreMode } from './lib/store'
-import type { Ingredient, Recipe } from './lib/types'
+import { DEFAULT_SETTINGS, type Ingredient, type Recipe, type Settings } from './lib/types'
 import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
 import Ingredients from './pages/Ingredients'
@@ -20,6 +20,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('dashboard')
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [recipes, setRecipes] = useState<Recipe[]>([])
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<StoreMode | null>(null)
 
@@ -39,9 +40,10 @@ export default function App() {
 
   const reload = useCallback(async () => {
     try {
-      const [ing, rec] = await Promise.all([store.list('ingredients'), store.list('recipes')])
+      const [ing, rec, set] = await Promise.all([store.list('ingredients'), store.list('recipes'), store.getSettings()])
       setIngredients(ing)
       setRecipes(rec)
+      setSettings(set)
       setError(null)
     } catch (e) {
       setError((e as Error).message)
@@ -52,6 +54,16 @@ export default function App() {
   useEffect(() => {
     if (canUse && mode) reload()
   }, [canUse, mode, reload])
+
+  async function saveSettings(next: Settings) {
+    try {
+      await store.saveSettings(next)
+      setSettings(next)
+      setError(null)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
 
   async function examples() {
     try {
@@ -89,12 +101,12 @@ export default function App() {
         {mode === 'local' && (
           <div className="hint">Modo de teste: os dados ficam salvos só neste navegador.</div>
         )}
-        {tab === 'dashboard' && <Dashboard ingredients={ingredients} recipes={recipes} onGo={setTab} onExamples={examples} />}
+        {tab === 'dashboard' && <Dashboard ingredients={ingredients} recipes={recipes} settings={settings} onSaveSettings={saveSettings} onGo={setTab} onExamples={examples} />}
         {tab === 'ingredients' && (
           <Ingredients ingredients={ingredients} recipes={recipes} reload={reload} onError={setError} />
         )}
         {tab === 'recipes' && (
-          <Recipes ingredients={ingredients} recipes={recipes} reload={reload} onError={setError} />
+          <Recipes ingredients={ingredients} recipes={recipes} settings={settings} reload={reload} onError={setError} />
         )}
       </main>
     </div>

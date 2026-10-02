@@ -35,3 +35,15 @@ create policy "own ingredients" on ingredients
 drop policy if exists "own recipes" on recipes;
 create policy "own recipes" on recipes
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create table if not exists settings (
+  user_id uuid primary key default auth.uid() references auth.users on delete cascade,
+  cmv_min numeric not null default 30,
+  cmv_max numeric not null default 40
+);
+
+alter table settings enable row level security;
+
+drop policy if exists "own settings" on settings;
+create policy "own settings" on settings
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

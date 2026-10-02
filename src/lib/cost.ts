@@ -1,4 +1,4 @@
-import type { Ingredient, Recipe, Unit } from './types'
+import type { Ingredient, Recipe, Settings, Unit } from './types'
 
 export const UNITS: { value: Unit; label: string }[] = [
   { value: 'g', label: 'g' },
@@ -59,3 +59,21 @@ export const money = (n: number) => brl.format(Number.isFinite(n) ? n : 0)
 export const money4 = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 4 }).format(n)
 export const pct = (n: number) => `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
+
+export type CmvStatus = 'ok' | 'high' | 'low'
+
+/** Compara o CMV com a meta: acima do máximo = custo pesado demais no preço. */
+export function cmvStatus(cmv: number | null, s: Settings): CmvStatus | null {
+  if (cmv == null) return null
+  if (cmv > s.cmv_max) return 'high'
+  if (cmv < s.cmv_min) return 'low'
+  return 'ok'
+}
+
+export const CMV_LABEL: Record<CmvStatus, string> = { ok: 'Na meta', high: 'Acima da meta', low: 'Abaixo da meta' }
+
+/** Faixa de preço que deixa o CMV dentro da meta (preço = custo ÷ CMV). */
+export function priceRangeForCmv(unitCost: number, s: Settings): [number, number] | null {
+  if (unitCost <= 0 || s.cmv_min <= 0 || s.cmv_max <= 0) return null
+  return [unitCost / (s.cmv_max / 100), unitCost / (s.cmv_min / 100)]
+}

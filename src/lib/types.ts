@@ -25,3 +25,10 @@ export interface Recipe {
   notes: string | null
   items: RecipeItem[]
 }
+
+export interface Settings {
+  cmv_min: number
+  cmv_max: number
+}
+
+export const DEFAULT_SETTINGS: Settings = { cmv_min: 30, cmv_max: 40 }

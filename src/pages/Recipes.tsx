@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { compatibleUnits, itemCost, money, pct, recipeCost } from '../lib/cost'
+import { CmvValue, TargetPrice } from '../CmvBadge'
 import ConfirmButton from '../ConfirmButton'
 import { store } from '../lib/store'
-import type { Ingredient, Recipe, RecipeItem } from '../lib/types'
+import type { Ingredient, Recipe, RecipeItem, Settings } from '../lib/types'
 
 interface Props {
   ingredients: Ingredient[]
   recipes: Recipe[]
+  settings: Settings
   reload: () => Promise<void>
   onError: (msg: string) => void
 }
@@ -16,7 +18,7 @@ const newDraft = (): Draft => ({
   name: '', yield_qty: 10, yield_label: 'pacotes', extra_costs: 0, margin_pct: 100, sale_price: null, notes: '', items: [],
 })
 
-export default function Recipes({ ingredients, recipes, reload, onError }: Props) {
+export default function Recipes({ ingredients, recipes, settings, reload, onError }: Props) {
   const [draft, setDraft] = useState<Draft | null>(null)
 
   async function remove(r: Recipe) {
@@ -33,6 +35,7 @@ export default function Recipes({ ingredients, recipes, reload, onError }: Props
       <Editor
         draft={draft}
         ingredients={ingredients}
+        settings={settings}
         onCancel={() => setDraft(null)}
         onSave={async (d) => {
           try {
@@ -66,10 +69,11 @@ export default function Recipes({ ingredients, recipes, reload, onError }: Props
               <dl>
                 <dt>Custo por unidade</dt><dd>{money(c.unitCost)}</dd>
                 <dt>Preço sugerido ({pct(r.margin_pct)})</dt><dd className="strong">{money(c.suggestedPrice)}</dd>
+                <dt>Preço p/ CMV {pct(settings.cmv_min)}–{pct(settings.cmv_max)}</dt><dd><TargetPrice unitCost={c.unitCost} settings={settings} /></dd>
                 {c.salePrice != null && (
                   <>
                     <dt>Preço atual</dt><dd>{money(c.salePrice)}</dd>
-                    <dt>CMV</dt><dd>{c.cmvPct == null ? '—' : pct(c.cmvPct)}</dd>
+                    <dt>CMV</dt><dd><CmvValue cmv={c.cmvPct} settings={settings} /></dd>
                     <dt>Lucro por unidade</dt>
                     <dd className={c.unitProfit! < 0 ? 'neg' : 'pos'}>
                       {money(c.unitProfit!)} {c.realMarginPct != null && `(${pct(c.realMarginPct)})`}
@@ -90,9 +94,10 @@ export default function Recipes({ ingredients, recipes, reload, onError }: Props
   )
 }
 
-function Editor({ draft: initial, ingredients, onCancel, onSave }: {
+function Editor({ draft: initial, ingredients, settings, onCancel, onSave }: {
   draft: Draft
   ingredients: Ingredient[]
+  settings: Settings
   onCancel: () => void
   onSave: (d: Draft) => Promise<void>
 }) {
@@ -192,9 +197,10 @@ function Editor({ draft: initial, ingredients, onCancel, onSave }: {
           <dt>Outros custos</dt><dd>{money(d.extra_costs || 0)}</dd>
           <dt>Custo por {d.yield_label.replace(/s$/, '') || 'unidade'}</dt><dd className="strong">{money(c.unitCost)}</dd>
           <dt>Preço sugerido</dt><dd className="strong accent">{money(c.suggestedPrice)}</dd>
+          <dt>Preço p/ CMV {pct(settings.cmv_min)}–{pct(settings.cmv_max)}</dt><dd><TargetPrice unitCost={c.unitCost} settings={settings} /></dd>
           {c.cmvPct != null && (
             <>
-              <dt>CMV</dt><dd className="strong">{pct(c.cmvPct)}</dd>
+              <dt>CMV</dt><dd className="strong"><CmvValue cmv={c.cmvPct} settings={settings} /></dd>
             </>
           )}
           {c.unitProfit != null && (
