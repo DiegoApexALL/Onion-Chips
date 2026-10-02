@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { CmvValue } from '../CmvBadge'
+import { CmvChart, CostBreakdown, Metrics } from './Charts'
 import { cmvStatus, money, pct, recipeCost } from '../lib/cost'
 import type { Ingredient, Recipe, Settings } from '../lib/types'
 
@@ -44,7 +45,11 @@ export default function Dashboard({ ingredients, recipes, settings, onSaveSettin
         <Stat label="Receitas" value={String(recipes.length)} />
         <Stat label="CMV médio" value={avgCmv == null ? '—' : pct(avgCmv)} tone={avgStatus} />
       </div>
-      <CmvTarget settings={settings} onSave={onSaveSettings} />
+      <Metrics ingredients={ingredients} recipes={recipes} settings={settings} />
+      <div className="chart-grid">
+        <CmvChart ingredients={ingredients} recipes={recipes} settings={settings} />
+        <CostBreakdown ingredients={ingredients} recipes={recipes} />
+      </div>
       <section className="card">
         <div className="row-between">
           <h2>Resumo das receitas</h2>
@@ -85,6 +90,7 @@ export default function Dashboard({ ingredients, recipes, settings, onSaveSettin
           </div>
         )}
       </section>
+      <CmvTarget settings={settings} onSave={onSaveSettings} />
     </>
   )
 }
