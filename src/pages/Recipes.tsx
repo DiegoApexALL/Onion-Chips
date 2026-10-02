@@ -64,12 +64,12 @@ export default function Recipes({ ingredients, recipes, reload, onError }: Props
               <h3>{r.name}</h3>
               <p className="muted small">Rende {r.yield_qty.toLocaleString('pt-BR')} {r.yield_label}</p>
               <dl>
-                <dt>Custo do lote</dt><dd>{money(c.batchCost)}</dd>
                 <dt>Custo por unidade</dt><dd>{money(c.unitCost)}</dd>
                 <dt>Preço sugerido ({pct(r.margin_pct)})</dt><dd className="strong">{money(c.suggestedPrice)}</dd>
                 {c.salePrice != null && (
                   <>
                     <dt>Preço atual</dt><dd>{money(c.salePrice)}</dd>
+                    <dt>CMV</dt><dd>{c.cmvPct == null ? '—' : pct(c.cmvPct)}</dd>
                     <dt>Lucro por unidade</dt>
                     <dd className={c.unitProfit! < 0 ? 'neg' : 'pos'}>
                       {money(c.unitProfit!)} {c.realMarginPct != null && `(${pct(c.realMarginPct)})`}

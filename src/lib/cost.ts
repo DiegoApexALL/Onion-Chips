@@ -34,6 +34,8 @@ export interface RecipeCost {
   salePrice: number | null
   unitProfit: number | null
   realMarginPct: number | null
+  /** CMV %: custo por unidade ÷ preço atual × 100 */
+  cmvPct: number | null
 }
 
 export function recipeCost(recipe: Recipe, ingredients: Ingredient[]): RecipeCost {
@@ -48,7 +50,8 @@ export function recipeCost(recipe: Recipe, ingredients: Ingredient[]): RecipeCos
   const salePrice = recipe.sale_price ?? null
   const unitProfit = salePrice != null ? salePrice - unitCost : null
   const realMarginPct = salePrice != null && unitCost > 0 ? ((salePrice - unitCost) / unitCost) * 100 : null
-  return { ingredientsCost, batchCost, unitCost, suggestedPrice, salePrice, unitProfit, realMarginPct }
+  const cmvPct = salePrice != null && salePrice > 0 ? (unitCost / salePrice) * 100 : null
+  return { ingredientsCost, batchCost, unitCost, suggestedPrice, salePrice, unitProfit, realMarginPct, cmvPct }
 }
 
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
