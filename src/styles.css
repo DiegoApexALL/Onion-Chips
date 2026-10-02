@@ -128,3 +128,4 @@ dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
   .tabs { order: 3; flex-basis: 100%; }
   .topbar { justify-content: space-between; gap: 8px; }
 }
+.center-actions { justify-content: center; }

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { money, pct, recipeCost } from '../lib/cost'
 import type { Ingredient, Recipe } from '../lib/types'
 
@@ -5,9 +6,11 @@ interface Props {
   ingredients: Ingredient[]
   recipes: Recipe[]
   onGo: (tab: 'ingredients' | 'recipes') => void
+  onExamples: () => Promise<void>
 }
 
-export default function Dashboard({ ingredients, recipes, onGo }: Props) {
+export default function Dashboard({ ingredients, recipes, onGo, onExamples }: Props) {
+  const [loading, setLoading] = useState(false)
   const rows = recipes.map((r) => ({ r, c: recipeCost(r, ingredients) }))
   const priced = rows.filter((x) => x.c.realMarginPct != null)
   const avgMargin = priced.length ? priced.reduce((s, x) => s + x.c.realMarginPct!, 0) / priced.length : null
@@ -18,9 +21,14 @@ export default function Dashboard({ ingredients, recipes, onGo }: Props) {
         <h2>Bem-vindo! 👋</h2>
         <p>Comece cadastrando seus ingredientes (ex.: cebola, óleo, sal, embalagem) com o preço que você paga.</p>
         <p>Depois monte uma receita dizendo quanto de cada ingrediente usa e quantas unidades ela rende.</p>
-        <button className="primary" onClick={() => onGo('ingredients')}>
-          Cadastrar ingredientes
-        </button>
+        <div className="actions center-actions">
+          <button className="primary" onClick={() => onGo('ingredients')}>
+            Cadastrar ingredientes
+          </button>
+          <button className="ghost" disabled={loading} onClick={async () => { setLoading(true); await onExamples(); setLoading(false) }}>
+            {loading ? 'Carregando…' : 'Carregar exemplo de onion chips'}
+          </button>
+        </div>
       </div>
     )
   }

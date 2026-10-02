@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { store, supabase } from './lib/store'
+import { initStore, loadExamples, store, supabase, type StoreMode } from './lib/store'
 import type { Ingredient, Recipe } from './lib/types'
 import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
@@ -21,6 +21,11 @@ export default function App() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [mode, setMode] = useState<StoreMode | null>(null)
+
+  useEffect(() => {
+    initStore().then(setMode)
+  }, [])
 
   useEffect(() => {
     if (!supabase) return
@@ -45,10 +50,19 @@ export default function App() {
 
   const canUse = !supabase || !!session
   useEffect(() => {
-    if (canUse) reload()
-  }, [canUse, reload])
+    if (canUse && mode) reload()
+  }, [canUse, mode, reload])
 
-  if (!authReady) return <div className="center muted">Carregando…</div>
+  async function examples() {
+    try {
+      await loadExamples()
+    } catch (e) {
+      setError((e as Error).message)
+    }
+    await reload()
+  }
+
+  if (!authReady || !mode) return <div className="center muted">Carregando…</div>
   if (!canUse) return <Auth />
 
   return (
@@ -67,17 +81,15 @@ export default function App() {
             Sair
           </button>
         ) : (
-          <span className="badge" title="Configure o Supabase para salvar na nuvem">Modo local</span>
+          <span className="badge">{mode === 'cloud' ? 'Salvo na nuvem' : 'Modo local'}</span>
         )}
       </header>
       <main className="content">
         {error && <div className="alert">Erro: {error}</div>}
-        {!supabase && (
-          <div className="hint">
-            Modo de teste: os dados ficam salvos só neste navegador. Os itens marcados "(exemplo)" podem ser editados ou excluídos.
-          </div>
+        {mode === 'local' && (
+          <div className="hint">Modo de teste: os dados ficam salvos só neste navegador.</div>
         )}
-        {tab === 'dashboard' && <Dashboard ingredients={ingredients} recipes={recipes} onGo={setTab} />}
+        {tab === 'dashboard' && <Dashboard ingredients={ingredients} recipes={recipes} onGo={setTab} onExamples={examples} />}
         {tab === 'ingredients' && (
           <Ingredients ingredients={ingredients} recipes={recipes} reload={reload} onError={setError} />
         )}

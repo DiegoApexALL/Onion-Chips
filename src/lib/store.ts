@@ -59,42 +59,8 @@ function write(key: string, value: string) {
   }
 }
 
-// Dados de exemplo na primeira visita, para o app não abrir vazio
-function seedExamples() {
-  if (read('onion-cost:seeded')) return
-  const ing = (name: string, unit: Ingredient['unit'], package_price: number, package_qty: number): Ingredient => ({
-    id: crypto.randomUUID(), name, unit, package_price, package_qty,
-  })
-  const cebola = ing('Cebola (exemplo)', 'kg', 5.99, 1)
-  const oleo = ing('Óleo de girassol (exemplo)', 'l', 9.5, 0.9)
-  const farinha = ing('Farinha de trigo (exemplo)', 'kg', 4.8, 1)
-  const sal = ing('Sal (exemplo)', 'kg', 2.5, 1)
-  const pacote = ing('Embalagem 100g (exemplo)', 'un', 35, 100)
-  const recipe: Recipe = {
-    id: crypto.randomUUID(),
-    name: 'Onion chips 100g (exemplo)',
-    yield_qty: 12,
-    yield_label: 'pacotes',
-    extra_costs: 6,
-    margin_pct: 120,
-    sale_price: 9.9,
-    notes: 'Receita de exemplo. Edite ou exclua à vontade.',
-    items: [
-      { ingredient_id: cebola.id, quantity: 3, unit: 'kg' },
-      { ingredient_id: oleo.id, quantity: 600, unit: 'ml' },
-      { ingredient_id: farinha.id, quantity: 400, unit: 'g' },
-      { ingredient_id: sal.id, quantity: 30, unit: 'g' },
-      { ingredient_id: pacote.id, quantity: 12, unit: 'un' },
-    ],
-  }
-  write('onion-cost:ingredients', JSON.stringify([cebola, oleo, farinha, sal, pacote]))
-  write('onion-cost:recipes', JSON.stringify([recipe]))
-  write('onion-cost:seeded', '1')
-}
-
 const localStore: Store = {
   async list(table) {
-    seedExamples()
     try {
       const rows = JSON.parse(read(`onion-cost:${table}`) || '[]')
       return rows.sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name))
@@ -117,4 +83,103 @@ const localStore: Store = {
   },
 }
 
-export const store: Store = supabase ? supabaseStore(supabase) : localStore
+/** Banco na nuvem da página publicada no Claude (dados privados de cada pessoa). */
+interface ClaudeDoc {
+  get(): Promise<{ exists: boolean; data(): Record<string, unknown> | undefined }>
+  set(data: Record<string, unknown>): Promise<void>
+}
+interface ClaudeRuntime {
+  use(name: 'db'): Promise<{ doc(path: string): ClaudeDoc } | null>
+  use(name: 'user'): Promise<{ id(): Promise<string | null> } | null>
+}
+
+async function claudeStore(): Promise<Store | null> {
+  const claude = (window as unknown as { claude?: ClaudeRuntime }).claude
+  if (!claude?.use) return null
+  const [db, user] = await Promise.all([claude.use('db'), claude.use('user')])
+  const uid = await user?.id()
+  if (!db || !uid) return null
+  const ref = (table: Table) => db.doc(`data/users/${uid}/${table}`)
+  const read = async (table: Table) => {
+    const snap = await ref(table).get()
+    return ((snap.exists && (snap.data()?.rows as { id: string; name: string }[])) || []).slice()
+  }
+  const write = (table: Table, rows: unknown[]) => ref(table).set({ rows }).catch((e: { code?: string; message?: string }) => {
+    throw new Error(e?.code === 'invalid_argument'
+      ? 'Você só tem permissão para ver esta página, não para salvar.'
+      : `Não foi possível salvar (${e?.code ?? e?.message ?? 'erro'}). Tente de novo.`)
+  })
+  return {
+    async list(table) {
+      const rows = await read(table)
+      return rows.sort((a, b) => a.name.localeCompare(b.name)) as never
+    },
+    async save(table, row) {
+      const rows = await read(table)
+      const saved = { ...row, id: row.id ?? crypto.randomUUID() }
+      const i = rows.findIndex((r) => r.id === saved.id)
+      if (i >= 0) rows[i] = saved as never
+      else rows.push(saved as never)
+      await write(table, rows)
+      return saved as never
+    },
+    async remove(table, id) {
+      await write(table, (await read(table)).filter((r) => r.id !== id))
+    },
+  }
+}
+
+export type StoreMode = 'supabase' | 'cloud' | 'local'
+let active: Store = supabase ? supabaseStore(supabase) : localStore
+
+/** Escolhe onde salvar: Supabase (se configurado), nuvem do Claude ou navegador. */
+export async function initStore(): Promise<StoreMode> {
+  if (supabase) return 'supabase'
+  try {
+    const cloud = await claudeStore()
+    if (cloud) {
+      active = cloud
+      return 'cloud'
+    }
+  } catch {
+    /* sem nuvem: usa o navegador */
+  }
+  return 'local'
+}
+
+export const store: Store = {
+  list: (table) => active.list(table),
+  save: (table, row) => active.save(table, row),
+  remove: (table, id) => active.remove(table, id),
+}
+
+/** Cria ingredientes e uma receita de exemplo. */
+export async function loadExamples() {
+  const specs: [string, Ingredient['unit'], number, number][] = [
+    ['Cebola (exemplo)', 'kg', 5.99, 1],
+    ['Óleo de girassol (exemplo)', 'l', 9.5, 0.9],
+    ['Farinha de trigo (exemplo)', 'kg', 4.8, 1],
+    ['Sal (exemplo)', 'kg', 2.5, 1],
+    ['Embalagem 100g (exemplo)', 'un', 35, 100],
+  ]
+  const ids: string[] = []
+  for (const [name, unit, package_price, package_qty] of specs) {
+    ids.push((await store.save('ingredients', { name, unit, package_price, package_qty })).id)
+  }
+  await store.save('recipes', {
+    name: 'Onion chips 100g (exemplo)',
+    yield_qty: 12,
+    yield_label: 'pacotes',
+    extra_costs: 6,
+    margin_pct: 120,
+    sale_price: 9.9,
+    notes: 'Receita de exemplo. Edite ou exclua à vontade.',
+    items: [
+      { ingredient_id: ids[0], quantity: 3, unit: 'kg' },
+      { ingredient_id: ids[1], quantity: 600, unit: 'ml' },
+      { ingredient_id: ids[2], quantity: 400, unit: 'g' },
+      { ingredient_id: ids[3], quantity: 30, unit: 'g' },
+      { ingredient_id: ids[4], quantity: 12, unit: 'un' },
+    ],
+  })
+}
