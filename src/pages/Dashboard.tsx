@@ -12,8 +12,8 @@ interface Props {
 export default function Dashboard({ ingredients, recipes, onGo, onExamples }: Props) {
   const [loading, setLoading] = useState(false)
   const rows = recipes.map((r) => ({ r, c: recipeCost(r, ingredients) }))
-  const priced = rows.filter((x) => x.c.realMarginPct != null)
-  const avgMargin = priced.length ? priced.reduce((s, x) => s + x.c.realMarginPct!, 0) / priced.length : null
+  const priced = rows.filter((x) => x.c.cmvPct != null)
+  const avgCmv = priced.length ? priced.reduce((s, x) => s + x.c.cmvPct!, 0) / priced.length : null
 
   if (!ingredients.length && !recipes.length) {
     return (
@@ -38,7 +38,7 @@ export default function Dashboard({ ingredients, recipes, onGo, onExamples }: Pr
       <div className="stats">
         <Stat label="Ingredientes" value={String(ingredients.length)} />
         <Stat label="Receitas" value={String(recipes.length)} />
-        <Stat label="Margem média real" value={avgMargin == null ? '—' : pct(avgMargin)} />
+        <Stat label="CMV médio" value={avgCmv == null ? '—' : pct(avgCmv)} />
       </div>
       <section className="card">
         <div className="row-between">
@@ -55,10 +55,10 @@ export default function Dashboard({ ingredients, recipes, onGo, onExamples }: Pr
               <thead>
                 <tr>
                   <th>Receita</th>
-                  <th className="num">Custo do lote</th>
                   <th className="num">Custo/un</th>
                   <th className="num">Preço sugerido</th>
                   <th className="num">Preço atual</th>
+                  <th className="num">CMV</th>
                   <th className="num">Lucro/un</th>
                 </tr>
               </thead>
@@ -66,10 +66,10 @@ export default function Dashboard({ ingredients, recipes, onGo, onExamples }: Pr
                 {rows.map(({ r, c }) => (
                   <tr key={r.id}>
                     <td>{r.name}</td>
-                    <td className="num">{money(c.batchCost)}</td>
                     <td className="num">{money(c.unitCost)}</td>
                     <td className="num">{money(c.suggestedPrice)}</td>
                     <td className="num">{c.salePrice == null ? '—' : money(c.salePrice)}</td>
+                    <td className="num">{c.cmvPct == null ? '—' : pct(c.cmvPct)}</td>
                     <td className={`num ${c.unitProfit != null && c.unitProfit < 0 ? 'neg' : 'pos'}`}>
                       {c.unitProfit == null ? '—' : money(c.unitProfit)}
                     </td>

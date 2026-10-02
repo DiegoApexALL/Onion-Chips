@@ -190,9 +190,13 @@ function Editor({ draft: initial, ingredients, onCancel, onSave }: {
         <dl>
           <dt>Ingredientes</dt><dd>{money(c.ingredientsCost)}</dd>
           <dt>Outros custos</dt><dd>{money(d.extra_costs || 0)}</dd>
-          <dt>Custo do lote</dt><dd className="strong">{money(c.batchCost)}</dd>
           <dt>Custo por {d.yield_label.replace(/s$/, '') || 'unidade'}</dt><dd className="strong">{money(c.unitCost)}</dd>
           <dt>Preço sugerido</dt><dd className="strong accent">{money(c.suggestedPrice)}</dd>
+          {c.cmvPct != null && (
+            <>
+              <dt>CMV</dt><dd className="strong">{pct(c.cmvPct)}</dd>
+            </>
+          )}
           {c.unitProfit != null && (
             <>
               <dt>Lucro com preço atual</dt>
