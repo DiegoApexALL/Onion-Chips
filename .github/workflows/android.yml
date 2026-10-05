@@ -1,0 +1,50 @@
+name: App Android
+
+on:
+  push:
+    branches: [main, master, claude/onion-cost-app-clone-qdy4s1]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Build do app web
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+
+      - name: Build do APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk ../OnionCost.apk
+
+      - name: Publicar para download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v${{ github.run_number }}
+          name: Onion Cost para Android (versão ${{ github.run_number }})
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body: |
+            Para instalar: abra este link no celular, toque em **OnionCost.apk** e confirme a instalação.
+            Se o Android pedir, permita instalar apps desta fonte.
+          files: OnionCost.apk

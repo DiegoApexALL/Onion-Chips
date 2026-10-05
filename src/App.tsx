@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import type { Session } from '@supabase/supabase-js'
 import { initStore, loadExamples, store, supabase, type StoreMode } from './lib/store'
 import { DEFAULT_SETTINGS, type Ingredient, type Recipe, type Settings } from './lib/types'
@@ -8,6 +9,8 @@ import Ingredients from './pages/Ingredients'
 import Recipes from './pages/Recipes'
 
 type Tab = 'dashboard' | 'ingredients' | 'recipes'
+const isApp = Capacitor.isNativePlatform()
+
 const TABS: { id: Tab; label: string }[] = [
   { id: 'dashboard', label: 'Painel' },
   { id: 'ingredients', label: 'Ingredientes' },
@@ -93,12 +96,12 @@ export default function App() {
             Sair
           </button>
         ) : (
-          <span className="badge">{mode === 'cloud' ? 'Salvo na nuvem' : 'Modo local'}</span>
+          <span className="badge">{mode === 'cloud' ? 'Salvo na nuvem' : isApp ? 'Neste celular' : 'Modo local'}</span>
         )}
       </header>
       <main className="content">
         {error && <div className="alert">Erro: {error}</div>}
-        {mode === 'local' && (
+        {mode === 'local' && !isApp && (
           <div className="hint">Modo de teste: os dados ficam salvos só neste navegador.</div>
         )}
         {tab === 'dashboard' && <Dashboard ingredients={ingredients} recipes={recipes} settings={settings} onSaveSettings={saveSettings} onGo={setTab} onExamples={examples} />}

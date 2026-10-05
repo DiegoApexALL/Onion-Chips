@@ -32,3 +32,12 @@ npm run dev
 1. Importe este repositório na [Vercel](https://vercel.com) ou [Netlify](https://netlify.com).
 2. Build command: `npm run build` · Output: `dist`.
 3. Adicione as variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` nas configurações do projeto.
+
+## App Android
+
+O projeto Android fica em `android/` (Capacitor). A cada push, o GitHub Actions
+(`.github/workflows/android.yml`) gera o `OnionCost.apk` e publica em
+**Releases** — abra `https://github.com/DiegoApexALL/Onion-Chips/releases/latest`
+no celular para baixar e instalar. No app, os dados ficam salvos no próprio celular.
+
+Para gerar localmente (precisa do Android SDK): `npm run build && npx cap sync android && cd android && ./gradlew assembleRelease`.
