@@ -1,10 +1,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { supabaseKey, supabaseUrl } from './config'
 import { DEFAULT_SETTINGS, type Ingredient, type Recipe, type Settings } from './types'
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
-
-export const supabase: SupabaseClient | null = url && key ? createClient(url, key) : null
+export const supabase: SupabaseClient | null = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null
 
 type Table = 'ingredients' | 'recipes'
 type Row<T extends Table> = T extends 'ingredients' ? Ingredient : Recipe
@@ -57,13 +55,12 @@ const supabaseStore = (sb: SupabaseClient): Store => ({
     if (error) throw error
   },
   async getSettings() {
-    const { data, error } = await sb.from('settings').select('cmv_min, cmv_max').maybeSingle()
+    const { data, error } = await sb.from('settings').select('cmv_min, cmv_max').eq('id', 1).maybeSingle()
     if (error) throw error
     return toSettings(data)
   },
   async saveSettings(settings) {
-    const { data: auth } = await sb.auth.getUser()
-    const { error } = await sb.from('settings').upsert({ user_id: auth.user?.id, ...settings })
+    const { error } = await sb.from('settings').upsert({ id: 1, ...settings })
     if (error) throw error
   },
 })

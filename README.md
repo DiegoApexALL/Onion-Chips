@@ -6,7 +6,7 @@ App para calcular o **custo de produção** e o **preço de venda** de produtos 
 - **Receitas**: diga quanto de cada ingrediente usa no lote, quanto rende, outros custos (gás, energia, mão de obra) e a margem desejada. O app mostra custo do lote, custo por unidade, **preço sugerido** e o lucro com o preço que você pratica hoje.
 - **Painel**: resumo de todas as receitas e margem média.
 
-Feito com React + Vite. Banco de dados gratuito no **Supabase** (com login por e-mail e cada usuário vendo só os próprios dados). Sem Supabase configurado, o app funciona em **modo local** (salva no navegador).
+Feito com React + Vite. Banco de dados gratuito no **Supabase**, único e compartilhado: todos que entram (login por e-mail) veem e editam os mesmos registros, pelo site ou pelo app Android. Sem Supabase configurado, o app funciona em **modo local** (salva no navegador).
 
 ## Rodar localmente
 
@@ -20,7 +20,7 @@ npm run dev
 1. Crie uma conta em [supabase.com](https://supabase.com) e um projeto novo (plano Free).
 2. Em **SQL Editor → New query**, cole o conteúdo de [`supabase/schema.sql`](supabase/schema.sql) e clique em **Run**.
 3. Em **Project Settings → API**, copie a *Project URL* e a chave *anon public*.
-4. Copie `.env.example` para `.env` e preencha:
+4. Coloque os dois valores em `src/lib/config.ts` (ou copie `.env.example` para `.env` e preencha):
    ```
    VITE_SUPABASE_URL=https://xxxx.supabase.co
    VITE_SUPABASE_ANON_KEY=...

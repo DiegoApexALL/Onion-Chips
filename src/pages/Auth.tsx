@@ -25,7 +25,7 @@ export default function Auth() {
     <div className="center">
       <form className="card auth" onSubmit={submit}>
         <h1>🧅 Onion Cost</h1>
-        <p className="muted">Calcule o custo e o preço de venda dos seus produtos.</p>
+        <p className="muted">Entre para ver e editar os ingredientes e receitas da equipe.</p>
         <label>
           E-mail
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
