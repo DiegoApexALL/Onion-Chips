@@ -11,6 +11,8 @@
   "dependencies": {
     "@capacitor/android": "^8.5.2",
     "@capacitor/core": "^8.5.2",
+    "@capacitor/filesystem": "^8.1.4",
+    "@capacitor/share": "^8.0.3",
     "@supabase/supabase-js": "^2.117.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"

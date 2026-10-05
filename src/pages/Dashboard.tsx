@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { CmvValue } from '../CmvBadge'
+import BackupCard from './BackupCard'
 import { CmvChart, CostBreakdown, Metrics } from './Charts'
 import { cmvStatus, money, pct, recipeCost } from '../lib/cost'
 import type { Ingredient, Recipe, Settings } from '../lib/types'
@@ -11,9 +12,10 @@ interface Props {
   onSaveSettings: (s: Settings) => Promise<void>
   onGo: (tab: 'ingredients' | 'recipes') => void
   onExamples: () => Promise<void>
+  onRestored: () => Promise<void>
 }
 
-export default function Dashboard({ ingredients, recipes, settings, onSaveSettings, onGo, onExamples }: Props) {
+export default function Dashboard({ ingredients, recipes, settings, onSaveSettings, onGo, onExamples, onRestored }: Props) {
   const [loading, setLoading] = useState(false)
   const rows = recipes.map((r) => ({ r, c: recipeCost(r, ingredients) }))
   const priced = rows.filter((x) => x.c.cmvPct != null)
@@ -22,6 +24,7 @@ export default function Dashboard({ ingredients, recipes, settings, onSaveSettin
 
   if (!ingredients.length && !recipes.length) {
     return (
+      <>
       <div className="card empty">
         <h2>Bem-vindo! 👋</h2>
         <p>Comece cadastrando seus ingredientes (ex.: cebola, óleo, sal, embalagem) com o preço que você paga.</p>
@@ -35,6 +38,8 @@ export default function Dashboard({ ingredients, recipes, settings, onSaveSettin
           </button>
         </div>
       </div>
+      <BackupCard onRestored={onRestored} />
+      </>
     )
   }
 
@@ -91,6 +96,7 @@ export default function Dashboard({ ingredients, recipes, settings, onSaveSettin
         )}
       </section>
       <CmvTarget settings={settings} onSave={onSaveSettings} />
+      <BackupCard onRestored={onRestored} />
     </>
   )
 }

@@ -13,6 +13,8 @@ export interface Store {
   list<T extends Table>(table: T): Promise<Row<T>[]>
   save<T extends Table>(table: T, row: Omit<Row<T>, 'id'> & { id?: string }): Promise<Row<T>>
   remove(table: Table, id: string): Promise<void>
+  /** Substitui todos os registros da tabela (usado ao restaurar um backup). */
+  replaceAll<T extends Table>(table: T, rows: Row<T>[]): Promise<void>
   getSettings(): Promise<Settings>
   saveSettings(settings: Settings): Promise<void>
 }
@@ -45,6 +47,13 @@ const supabaseStore = (sb: SupabaseClient): Store => ({
   },
   async remove(table, id) {
     const { error } = await sb.from(table).delete().eq('id', id)
+    if (error) throw error
+  },
+  async replaceAll(table, rows) {
+    const del = await sb.from(table).delete().not('id', 'is', null)
+    if (del.error) throw del.error
+    if (!rows.length) return
+    const { error } = await sb.from(table).insert(rows)
     if (error) throw error
   },
   async getSettings() {
@@ -98,6 +107,9 @@ const localStore: Store = {
   async remove(table, id) {
     const rows = (await localStore.list(table)) as { id: string }[]
     write(`onion-cost:${table}`, JSON.stringify(rows.filter((r) => r.id !== id)))
+  },
+  async replaceAll(table, rows) {
+    write(`onion-cost:${table}`, JSON.stringify(rows))
   },
   async getSettings() {
     try {
@@ -154,6 +166,9 @@ async function claudeStore(): Promise<Store | null> {
     async remove(table, id) {
       await write(table, (await read(table)).filter((r) => r.id !== id))
     },
+    async replaceAll(table, rows) {
+      await write(table, rows)
+    },
     async getSettings() {
       const snap = await ref('settings').get()
       return toSettings(snap.exists ? snap.data() : null)
@@ -186,6 +201,7 @@ export const store: Store = {
   list: (table) => active.list(table),
   save: (table, row) => active.save(table, row),
   remove: (table, id) => active.remove(table, id),
+  replaceAll: (table, rows) => active.replaceAll(table, rows),
   getSettings: () => active.getSettings(),
   saveSettings: (settings) => active.saveSettings(settings),
 }

@@ -104,7 +104,7 @@ export default function App() {
         {mode === 'local' && !isApp && (
           <div className="hint">Modo de teste: os dados ficam salvos só neste navegador.</div>
         )}
-        {tab === 'dashboard' && <Dashboard ingredients={ingredients} recipes={recipes} settings={settings} onSaveSettings={saveSettings} onGo={setTab} onExamples={examples} />}
+        {tab === 'dashboard' && <Dashboard ingredients={ingredients} recipes={recipes} settings={settings} onSaveSettings={saveSettings} onGo={setTab} onExamples={examples} onRestored={reload} />}
         {tab === 'ingredients' && (
           <Ingredients ingredients={ingredients} recipes={recipes} reload={reload} onError={setError} />
         )}
