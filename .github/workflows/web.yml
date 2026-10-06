@@ -23,6 +23,15 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Testar conexão com o banco
+        run: |
+          URL=$(grep -oP "SUPABASE_URL = '\K[^']+" src/lib/config.ts)
+          KEY=$(grep -oP "SUPABASE_ANON_KEY = '\K[^']+" src/lib/config.ts)
+          if [ -z "$URL" ]; then echo "Supabase não configurado"; exit 0; fi
+          CODE=$(curl -s -o resposta.txt -w '%{http_code}' "$URL/rest/v1/settings?select=id" -H "apikey: $KEY")
+          echo "HTTP $CODE"; cat resposta.txt; echo
+          test "$CODE" = "200"
+
       - name: Build do site
         run: |
           npm ci
