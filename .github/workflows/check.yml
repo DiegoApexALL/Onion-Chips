@@ -29,9 +29,18 @@ jobs:
             -subj "/C=BR/O=ICP-Brasil/CN=EMPRESA TESTE LTDA:12345678000199"
           openssl pkcs12 -export -inkey key.pem -in cert.pem -out teste.pfx -passout pass:senha123
       - name: Checar tipos
-        run: deno check supabase/functions/nfe/index.ts
+        run: |
+          deno check supabase/functions/nfe/index.ts > out.log 2>&1 && exit 0
+          cat out.log
+          echo "::error title=deno check::$(sed 's/\x1b\[[0-9;]*m//g' out.log | head -80 | sed ':a;N;$!ba;s/\n/%0A/g')"
+          exit 1
       - name: Testes
+        if: always()
         env:
           TEST_PFX: teste.pfx
           TEST_PFX_PASSWORD: senha123
-        run: deno test --allow-read --allow-env supabase/functions/nfe/
+        run: |
+          deno test --allow-read --allow-env supabase/functions/nfe/ > out.log 2>&1 && exit 0
+          cat out.log
+          echo "::error title=deno test::$(sed 's/\x1b\[[0-9;]*m//g' out.log | tail -80 | sed ':a;N;$!ba;s/\n/%0A/g')"
+          exit 1
