@@ -1,0 +1,37 @@
+name: Verificar
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  funcao-nfe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Certificado A1 de teste (autoassinado)
+        run: |
+          openssl req -x509 -newkey rsa:2048 -nodes -days 30 -keyout key.pem -out cert.pem \
+            -subj "/C=BR/O=ICP-Brasil/CN=EMPRESA TESTE LTDA:12345678000199"
+          openssl pkcs12 -export -inkey key.pem -in cert.pem -out teste.pfx -passout pass:senha123
+      - name: Checar tipos
+        run: deno check supabase/functions/nfe/index.ts
+      - name: Testes
+        env:
+          TEST_PFX: teste.pfx
+          TEST_PFX_PASSWORD: senha123
+        run: deno test --allow-read --allow-env supabase/functions/nfe/
