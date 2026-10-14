@@ -1,0 +1,36 @@
+name: Função NF-e (Supabase)
+
+# Publica a função "nfe" no Supabase sempre que ela mudar.
+# Precisa do segredo SUPABASE_ACCESS_TOKEN no repositório (veja o README).
+
+on:
+  push:
+    branches: [main, master, claude/onion-cost-app-clone-qdy4s1]
+    paths: ['supabase/functions/**', '.github/workflows/supabase.yml']
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir segredo
+        id: token
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::warning::Segredo SUPABASE_ACCESS_TOKEN não configurado: a função não foi publicada."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: supabase/setup-cli@v1
+        if: steps.token.outputs.ok == 'true'
+        with:
+          version: latest
+      - name: Publicar função
+        if: steps.token.outputs.ok == 'true'
+        run: |
+          REF=$(grep -oP "SUPABASE_URL = 'https://\K[a-z0-9]+" src/lib/config.ts)
+          supabase functions deploy nfe --project-ref "$REF" --no-verify-jwt --use-api

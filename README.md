@@ -27,6 +27,39 @@ npm run dev
    ```
 5. (Opcional) Em **Authentication → Providers → Email**, desative *Confirm email* para entrar sem confirmar o e-mail.
 
+## Cadastro Empresas e notas fiscais recebidas
+
+A aba **Empresas** guarda os CNPJs das suas empresas e mostra quantas NF-e foram
+emitidas contra cada um no mês corrente (notas em que a empresa é destinatária),
+com o valor total. Os dados vêm direto da SEFAZ (serviço *NFeDistribuicaoDFe* do
+Ambiente Nacional), usando o **certificado digital A1 (e-CNPJ)** de cada empresa.
+
+Como funciona: o app chama a função `nfe` (Supabase Edge Function, em
+`supabase/functions/nfe`). Ela guarda o certificado criptografado, consulta a SEFAZ,
+salva o resumo de cada nota em `nfe_docs` e devolve o total do mês. A SEFAZ só
+libera uma nova consulta 1 hora depois de responder "nenhum documento novo"; nesse
+intervalo o app mostra o que já foi baixado. Na primeira consulta ela entrega as
+notas dos últimos ~90 dias.
+
+### Configurar (uma vez)
+
+1. **Banco:** no Supabase, abra **SQL Editor → New query**, cole o conteúdo de
+   [`supabase/empresas.sql`](supabase/empresas.sql) e clique em **Run**.
+2. **Publicar a função pelo GitHub:** no Supabase, crie um token em
+   **Account → Access Tokens** (https://supabase.com/dashboard/account/tokens).
+   No GitHub, em **Settings → Secrets and variables → Actions → New repository secret**,
+   crie `SUPABASE_ACCESS_TOKEN` com esse token. Depois rode o workflow
+   **Função NF-e (Supabase)** em **Actions** (ele também roda sozinho quando a função muda).
+3. *(Recomendado)* Em **Supabase → Edge Functions → Secrets**, crie `CERT_SECRET`
+   com uma senha longa qualquer. Ela criptografa os certificados guardados.
+   Se for trocar depois, envie os certificados de novo.
+4. No app, abra **Empresas**, cadastre o CNPJ e a UF, toque em **Certificado** e
+   envie o arquivo `.pfx` com a senha. Depois toque em **Consultar notas do mês**.
+
+Se a consulta reclamar do certificado do servidor da SEFAZ, crie o segredo
+`SEFAZ_CA_PEM` com as cadeias da ICP-Brasil em formato PEM (baixe em
+https://www.gov.br/iti/pt-br/assuntos/repositorio/certificados-das-acs-da-icp-brasil-arquivo-unico-compactado).
+
 ## Publicar grátis (Vercel ou Netlify)
 
 1. Importe este repositório na [Vercel](https://vercel.com) ou [Netlify](https://netlify.com).
