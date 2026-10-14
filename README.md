@@ -56,9 +56,18 @@ notas dos últimos ~90 dias.
 4. No app, abra **Empresas**, cadastre o CNPJ e a UF, toque em **Certificado** e
    envie o arquivo `.pfx` com a senha. Depois toque em **Consultar notas do mês**.
 
-Se a consulta reclamar do certificado do servidor da SEFAZ, crie o segredo
-`SEFAZ_CA_PEM` com as cadeias da ICP-Brasil em formato PEM (baixe em
-https://www.gov.br/iti/pt-br/assuntos/repositorio/certificados-das-acs-da-icp-brasil-arquivo-unico-compactado).
+### Intermediário da SEFAZ (Vercel)
+
+A SEFAZ pede o certificado no meio da conexão (renegociação TLS), e o ambiente do
+Supabase não sabe fazer isso. Por isso a chamada passa por uma função Node.js bem
+pequena na pasta [`sefaz-proxy`](sefaz-proxy), publicada de graça na Vercel em São
+Paulo (`gru1`). Ela só repassa o pedido e não guarda nada.
+
+1. Em https://vercel.com, entre com a conta do GitHub e clique em **Add New → Project**.
+2. Importe este repositório e, em **Root Directory**, escolha `sefaz-proxy`.
+3. Em **Environment Variables**, crie `PROXY_SECRET` com uma senha longa e clique em **Deploy**.
+4. No Supabase, grave o endereço e a mesma senha na tabela `app_secrets`
+   (`sefaz_proxy_url` e `sefaz_proxy_secret`, veja o fim de `supabase/empresas.sql`).
 
 ## Publicar grátis (Vercel ou Netlify)
 
