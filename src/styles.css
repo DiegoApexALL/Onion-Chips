@@ -209,3 +209,34 @@ select.compact { width: auto; max-width: 60%; padding: 5px 8px; font-size: 0.85r
 .note-list li>div:first-child{min-width:0;overflow-wrap:anywhere}
 .nfe-blocks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 @media(max-width:640px){.nfe-blocks{grid-template-columns:minmax(0,1fr)}}
+
+/* Fechamentos */
+.inline-label{display:flex;align-items:center;gap:8px}
+.inline-label input{width:auto}
+.prompt-box{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem}
+.import-view{display:grid;gap:12px}
+.import-view textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85rem}
+.closing-list{list-style:none;margin:0;padding:0}
+.closing-list li{border-bottom:1px solid var(--border)}
+.closing-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;width:100%;background:none;border:0;border-radius:0;padding:12px 4px;text-align:left;color:var(--text)}
+.closing-row:hover{background:var(--accent-soft)}
+.unit-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 0}
+.closing-edit{display:grid;gap:16px}
+.pay-grid{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center}
+.pay-label{font-weight:600;font-size:.9rem}
+.list-row{display:grid;gap:8px;align-items:end;margin-bottom:10px}
+.list-row label{gap:2px}
+.conf-list{list-style:none;margin:0;padding:0}
+.conf-list li{display:grid;grid-template-columns:1fr auto auto;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.9rem}
+.conf-list li.conf-diff{background:color-mix(in srgb,var(--warn) 8%,transparent)}
+.unit-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.unit-summary dl{margin:8px 0 0}
+.sticky-actions{position:sticky;bottom:0;background:var(--bg);padding:10px 0;border-top:1px solid var(--border)}
+@media(max-width:640px){
+  .closing-row{grid-template-columns:auto 1fr;row-gap:4px}
+  .closing-row .num{text-align:left}
+  .list-row{grid-template-columns:1fr 1fr!important}
+  .list-row label:first-child{grid-column:1 / -1}
+  .conf-list li{grid-template-columns:1fr auto}
+  .conf-list li>span:nth-child(2){grid-column:1 / -1;grid-row:2;text-align:left;color:var(--muted)}
+}

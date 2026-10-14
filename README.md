@@ -77,6 +77,22 @@ para este repositório. Nada sensível aparece no log.
 Observação: o GitHub pausa agendamentos de repositórios públicos sem atividade por 60
 dias. Se isso acontecer, reative em **Actions → Notas fiscais (SEFAZ) → Enable workflow**.
 
+## Fechamentos de caixa
+
+Aba **Fechamentos**: um fechamento por unidade e por dia, base para o DRE.
+
+1. No grupo de fechamento do WhatsApp, mande as fotos (PDV, maquininhas, recibo dos
+   deliveries e a folha de repasse/troco).
+2. No app, toque em **Copiar pedido para a Meta AI** e cole no grupo. A Meta AI responde
+   com o texto padronizado `#FECHAMENTO ONION COST`.
+3. Copie a resposta e use **Importar fechamento**. O app lê o texto (sem IA), reconhece a
+   unidade pelo nome/CNPJ, mostra a conferência (sistema × contado × maquininhas, gaveta)
+   e você revisa e salva.
+
+As unidades (com os nomes que aparecem nos comprovantes) ficam em **Fechamentos → Unidades**.
+Tabelas em [`supabase/fechamentos.sql`](supabase/fechamentos.sql). Teste do leitor:
+`bun scripts/fechamento.test.ts`.
+
 ## Publicar grátis (Vercel ou Netlify)
 
 1. Importe este repositório na [Vercel](https://vercel.com) ou [Netlify](https://netlify.com).
