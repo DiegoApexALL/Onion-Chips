@@ -9,14 +9,17 @@
 // pede o certificado por renegociação TLS, que o Deno (rustls) não suporta e o Node (OpenSSL) sim.
 // O workflow se identifica com o token OIDC do GitHub (sem senha guardada) e usa:
 //   { action: "sync-jobs" }                                          → empresas a sincronizar (com certificado)
-//   { action: "sync-ingest", company_id, response? | error? }        → grava uma resposta da SEFAZ
+//   { action: "sync-ingest", company_id, response? | error? }        → grava uma resposta da SEFAZ (NF-e recebidas)
+//   { action: "nfce-list-ingest", company_id, cursor, response? | error? } → chaves de NFC-e emitidas (SEFAZ-SP)
+//   { action: "nfce-xml-ingest", company_id, chave, response? | error? }   → XML de uma NFC-e (valor, cancelamento)
 //
 // Segredo opcional (Supabase > Edge Functions > Secrets):
 //   CERT_SECRET   — chave usada para criptografar os certificados (se faltar, usa a service role key)
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import {
-  currentMonth, gunzipBase64, parseDoc, parseRet, type ParsedDoc,
+  competenciaFromKey, currentMonth, fromLocal, gunzipBase64, localMinute, parseDoc, parseNfceList, parseNfceXml, parseRet,
+  type ParsedDoc,
 } from './sefaz.ts'
 import { readPfx, UserError } from './cert.ts'
 import { createRemoteJWKSet, jwtVerify } from 'npm:jose@5.9.6'
@@ -153,32 +156,148 @@ async function githubSync(token: string, body: Record<string, unknown>) {
   }
   if (body.action === 'sync-jobs') return { jobs: await syncJobs() }
   if (body.action === 'sync-ingest') return await syncIngest(String(body.company_id ?? ''), body)
+  if (body.action === 'nfce-list-ingest') return await nfceListIngest(String(body.company_id ?? ''), body)
+  if (body.action === 'nfce-xml-ingest') return await nfceXmlIngest(String(body.company_id ?? ''), body)
   throw new UserError('Ação desconhecida.')
 }
 
+const NFCE_DOWNLOADS_PER_RUN = 20
+
+/** Primeiro dia do mês, dois meses atrás (a SEFAZ-SP guarda ~100 dias). */
+function nfceStart(): Date {
+  const [y, m] = currentMonth().split('-').map(Number)
+  const d = new Date(Date.UTC(y, m - 3, 1, 3, 0)) // 00:00 em Brasília
+  const min = new Date(Date.now() - 95 * 24 * HOUR)
+  return d < min ? min : d
+}
+
 async function syncJobs() {
-  const now = new Date().toISOString()
-  const { data, error } = await admin.from('companies')
-    .select('id, cnpj, uf, last_nsu, next_sync_at')
-    .or(`next_sync_at.is.null,next_sync_at.lte.${now}`)
+  const now = Date.now()
+  const { data, error } = await admin.from('companies').select('id, cnpj, uf, last_nsu, next_sync_at, nfce_cursor, nfce_next_at')
   if (error) throw error
   const jobs = []
   for (const c of data ?? []) {
+    const nfeDue = !c.next_sync_at || new Date(c.next_sync_at).getTime() <= now
+    const isSP = c.uf === 'SP'
+    const listDue = isSP && (!c.nfce_next_at || new Date(c.nfce_next_at).getTime() <= now)
+    let downloads: string[] = []
+    if (isSP && (!c.nfce_next_at || new Date(c.nfce_next_at).getTime() <= now + HOUR)) {
+      const { data: pend } = await admin.from('nfce_docs').select('chave')
+        .eq('company_id', c.id).eq('baixada', false).lt('tentativas', 5)
+        .order('competencia', { ascending: false }).order('chave', { ascending: false })
+        .limit(NFCE_DOWNLOADS_PER_RUN)
+      downloads = (pend ?? []).map((r) => r.chave)
+    }
+    if (!nfeDue && !listDue && !downloads.length) continue
     const { data: row } = await admin.from('company_certs').select('payload').eq('company_id', c.id).maybeSingle()
     if (!row) continue
     try {
       const { pfx, password } = await decrypt<{ pfx: string; password: string }>(row.payload)
       const pem = readPfx(pfx, password)
-      if (pem.notAfter.getTime() < Date.now()) {
+      if (pem.notAfter.getTime() < now) {
         await admin.from('companies').update({ last_status: 'Certificado vencido: envie o novo para continuar.' }).eq('id', c.id)
         continue
       }
-      jobs.push({ company_id: c.id, cnpj: c.cnpj, uf: c.uf, last_nsu: Number(c.last_nsu) || 0, cert: pem.cert, key: pem.key })
+      const cursor = c.nfce_cursor ? new Date(c.nfce_cursor) : nfceStart()
+      jobs.push({
+        company_id: c.id, cnpj: c.cnpj, uf: c.uf, cert: pem.cert, key: pem.key,
+        nfe: nfeDue ? { last_nsu: Number(c.last_nsu) || 0 } : null,
+        nfce: isSP ? { list: listDue, cursor: localMinute(cursor < nfceStart() ? nfceStart() : cursor), downloads } : null,
+      })
     } catch (e) {
       await admin.from('companies').update({ last_status: `Erro no certificado: ${(e as Error).message}` }).eq('id', c.id)
     }
   }
   return jobs
+}
+
+/** Grava as chaves de uma página da listagem de NFC-e e diz se há mais páginas. */
+async function nfceListIngest(companyId: string, body: Record<string, unknown>) {
+  const later = new Date(Date.now() + HOUR).toISOString()
+  const save = (fields: Record<string, unknown>) =>
+    admin.from('companies').update({ nfce_sync_at: new Date().toISOString(), ...fields }).eq('id', companyId)
+  if (body.error) {
+    await save({ nfce_next_at: later, nfce_status: `Erro ao consultar a SEFAZ-SP: ${String(body.error).slice(0, 300)}` })
+    return { done: true }
+  }
+  let ret
+  try {
+    ret = parseNfceList(String(body.response ?? ''))
+  } catch (e) {
+    await save({ nfce_next_at: later, nfce_status: (e as Error).message })
+    return { done: true }
+  }
+  if (ret.cStat === 656) {
+    await save({ nfce_next_at: later, nfce_status: 'A SEFAZ-SP pediu para aguardar (consumo indevido).' })
+    return { done: true, stop: true }
+  }
+  if (![100, 101, 107].includes(ret.cStat)) {
+    await save({ nfce_next_at: later, nfce_status: `SEFAZ-SP: ${ret.cStat} - ${ret.xMotivo}` })
+    return { done: true }
+  }
+  if (ret.chaves.length) {
+    const rows = ret.chaves.map((chave) => ({ company_id: companyId, chave, competencia: competenciaFromKey(chave) }))
+    for (let i = 0; i < rows.length; i += 500) {
+      const up = await admin.from('nfce_docs').upsert(rows.slice(i, i + 500), { onConflict: 'company_id,chave', ignoreDuplicates: true })
+      if (up.error) throw up.error
+    }
+  }
+  if (ret.cStat === 101 && ret.dhEmisUltNfce) {
+    // Mais de 2.000 chaves: continua a partir da última emissão devolvida
+    const cursor = String(body.cursor ?? '')
+    let next = ret.dhEmisUltNfce.slice(0, 16)
+    if (next <= cursor) next = localMinute(new Date(fromLocal(cursor).getTime() + 60_000))
+    await save({ nfce_cursor: fromLocal(next).toISOString(), nfce_status: 'Listando NFC-e emitidas…' })
+    return { done: false, cursor: next, keys: ret.chaves.length }
+  }
+  // Lista completa: na próxima vez, relista só os últimos 2 dias (notas em contingência chegam depois)
+  await save({
+    nfce_cursor: new Date(Date.now() - 48 * HOUR).toISOString(),
+    nfce_next_at: later,
+    nfce_status: 'Lista de NFC-e atualizada.',
+  })
+  return { done: true, keys: ret.chaves.length }
+}
+
+/** Grava valor/data/cancelamento de uma NFC-e baixada. */
+async function nfceXmlIngest(companyId: string, body: Record<string, unknown>) {
+  const chave = String(body.chave ?? '')
+  const { data: cur } = await admin.from('nfce_docs').select('tentativas').eq('company_id', companyId).eq('chave', chave).maybeSingle()
+  if (!cur) throw new UserError('NFC-e não encontrada.')
+  const fail = () => admin.from('nfce_docs').update({ tentativas: cur.tentativas + 1, updated_at: new Date().toISOString() })
+    .eq('company_id', companyId).eq('chave', chave)
+  if (body.error) {
+    await fail()
+    return { ok: false }
+  }
+  let ret
+  try {
+    ret = parseNfceXml(String(body.response ?? ''))
+  } catch {
+    await fail()
+    return { ok: false }
+  }
+  if (ret.cStat === 656) {
+    await admin.from('companies').update({ nfce_status: 'A SEFAZ-SP pediu para aguardar antes de baixar mais NFC-e.' }).eq('id', companyId)
+    return { ok: false, stop: true }
+  }
+  if (ret.cStat !== 200) {
+    // 205 (não encontrada) / 207 (antiga demais): não adianta insistir muito
+    await admin.from('nfce_docs').update({
+      tentativas: [205, 207, 204, 203].includes(ret.cStat) ? 99 : cur.tentativas + 1, updated_at: new Date().toISOString(),
+    }).eq('company_id', companyId).eq('chave', chave)
+    return { ok: false, cStat: ret.cStat }
+  }
+  const up = await admin.from('nfce_docs').update({
+    baixada: true,
+    valor: ret.valor,
+    dh_emi: ret.dh_emi,
+    ...(ret.competencia ? { competencia: ret.competencia } : {}),
+    situacao: ret.cancelada ? 'cancelada' : 'autorizada',
+    updated_at: new Date().toISOString(),
+  }).eq('company_id', companyId).eq('chave', chave)
+  if (up.error) throw up.error
+  return { ok: true }
 }
 
 /** Grava uma resposta da SEFAZ e diz ao workflow se deve continuar e com qual NSU. */

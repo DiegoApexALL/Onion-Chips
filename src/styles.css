@@ -207,3 +207,5 @@ select.compact { width: auto; max-width: 60%; padding: 5px 8px; font-size: 0.85r
 .note-list{list-style:none;margin:0;padding:0;border-top:1px solid var(--border)}
 .note-list li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
 .note-list li>div:first-child{min-width:0;overflow-wrap:anywhere}
+.nfe-blocks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media(max-width:640px){.nfe-blocks{grid-template-columns:minmax(0,1fr)}}

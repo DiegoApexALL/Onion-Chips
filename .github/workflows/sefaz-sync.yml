@@ -21,10 +21,25 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # O servidor de NFC-e da SEFAZ-SP usa a cadeia ICP-Brasil v10, que não vem no sistema.
+      # Baixa a raiz do ITI e só aceita se a impressão digital bater com a publicada pela
+      # Microsoft (lista de raízes confiáveis do Windows, agosto/2020) e pelo próprio ITI.
+      - name: Raiz ICP-Brasil v10
+        continue-on-error: true
+        run: |
+          curl -sfk -o v10.crt https://acraiz.icpbrasil.gov.br/credenciadas/RAIZ/ICP-Brasilv10.crt
+          openssl x509 -in v10.crt -out icp.pem 2>/dev/null || openssl x509 -inform der -in v10.crt -out icp.pem
+          SHA1=$(openssl x509 -in icp.pem -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :)
+          SHA256=$(openssl x509 -in icp.pem -noout -fingerprint -sha256 | cut -d= -f2 | tr -d :)
+          if [ "$SHA1" = "6C155ED7271A904A0DC040F0C857FF53BF6DB290" ] && [ "$SHA256" = "6E0BFF069A26994C15DE2C4888CC54AF84882E5495B7FBF66BE9CCFFEC7489F6" ]; then
+            echo "ICP_ROOT_PEM=$PWD/icp.pem" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Raiz ICP-Brasil v10 com impressão digital inesperada; NFC-e não será consultada"
+          fi
       - run: node scripts/sefaz-sync.mjs

@@ -223,3 +223,66 @@ export function parseHttpResponse(buf: Uint8Array, eof: boolean): HttpResponse |
   }
   return { status, body: new TextDecoder().decode(body) }
 }
+
+// ---------- NFC-e emitidas (SAE-NFC-e da SEFAZ-SP) ----------
+
+/** Ano-mês de emissão gravado na chave de acesso (posições 3–6: AAMM). */
+export function competenciaFromKey(chave: string): string {
+  return `20${chave.slice(2, 4)}-${chave.slice(4, 6)}`
+}
+
+export interface NfceList { cStat: number; xMotivo: string; chaves: string[]; dhEmisUltNfce: string | null }
+
+export function parseNfceList(xml: string): NfceList {
+  const ret = tag(xml, 'retNfceListagemChaves')
+  if (ret == null) {
+    const fault = text(xml, 'Text') ?? text(xml, 'faultstring')
+    throw new Error(fault ? `SEFAZ-SP: ${fault}` : 'Resposta inesperada da SEFAZ-SP (listagem de NFC-e)')
+  }
+  const chaves = [...ret.matchAll(/<(?:[\w-]+:)?chNFCe>\s*([0-9A-Z]{44})\s*<\//g)].map((m) => m[1])
+  return { cStat: Number(text(ret, 'cStat')), xMotivo: text(ret, 'xMotivo') ?? '', chaves, dhEmisUltNfce: text(ret, 'dhEmisUltNfce') }
+}
+
+export interface NfceXml {
+  cStat: number
+  xMotivo: string
+  dh_emi: string | null
+  competencia: string | null
+  valor: number | null
+  cancelada: boolean
+}
+
+export function parseNfceXml(xml: string): NfceXml {
+  const ret = tag(xml, 'retNfceDownloadXML')
+  if (ret == null) {
+    const fault = text(xml, 'Text') ?? text(xml, 'faultstring')
+    throw new Error(fault ? `SEFAZ-SP: ${fault}` : 'Resposta inesperada da SEFAZ-SP (download de NFC-e)')
+  }
+  const proc = tag(ret, 'nfeProc') ?? ''
+  const ide = tag(proc, 'ide') ?? ''
+  const dh = text(ide, 'dhEmi')
+  const total = tag(proc, 'ICMSTot') ?? tag(proc, 'total') ?? ''
+  const eventos = [...ret.matchAll(/<(?:[\w-]+:)?tpEvento>\s*(\d+)\s*<\//g)].map((m) => m[1])
+  return {
+    cStat: Number(text(ret, 'cStat')),
+    xMotivo: text(ret, 'xMotivo') ?? '',
+    dh_emi: dh,
+    competencia: competencia(dh),
+    valor: num(text(total, 'vNF')),
+    cancelada: eventos.includes('110111') || eventos.includes('110112'),
+  }
+}
+
+/** Data/hora local de Brasília no formato AAAA-MM-DDThh:mm (usado pela SEFAZ-SP). */
+export function localMinute(d: Date): string {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(d).map((x) => [x.type, x.value]))
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`
+}
+
+/** Converte AAAA-MM-DDThh:mm[:ss] (horário de Brasília, sem fuso) em Date. */
+export function fromLocal(s: string): Date {
+  const [d, t = '00:00'] = s.split('T')
+  return new Date(`${d}T${t.slice(0, 5)}:00-03:00`)
+}
