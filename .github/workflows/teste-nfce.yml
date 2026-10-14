@@ -3,38 +3,19 @@ on:
   push:
     branches: [claude/teste-nfce-wsdl]
 jobs:
-  wsdl:
+  xsd:
     runs-on: ubuntu-latest
     steps:
-      - name: Cadeia do servidor
+      - name: XSD
         run: |
-          echo | openssl s_client -connect nfce.fazenda.sp.gov.br:443 -servername nfce.fazenda.sp.gov.br -showcerts 2>/dev/null | grep -E '^ *[0-9] s:|i:' | tr '\n' ' ' | sed 's/^/::notice title=cadeia::/'; echo
-      - name: Raiz ICP-Brasil v10 (conferida pela impressão digital da Microsoft)
-        run: |
-          curl -sk -o v10.crt https://acraiz.icpbrasil.gov.br/credenciadas/RAIZ/ICP-Brasilv10.crt
-          openssl x509 -in v10.crt -out icp.pem 2>/dev/null || openssl x509 -inform der -in v10.crt -out icp.pem
-          FP1=$(openssl x509 -in icp.pem -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :)
-          FP256=$(openssl x509 -in icp.pem -noout -fingerprint -sha256 | cut -d= -f2 | tr -d :)
-          echo "::notice title=v10::sha1=$FP1 sha256=$FP256"
-          test "$FP1" = "6C155ED7271A904A0DC040F0C857FF53BF6DB290"
-          # intermediária enviada pelo servidor
-          echo | openssl s_client -connect nfce.fazenda.sp.gov.br:443 -servername nfce.fazenda.sp.gov.br -CAfile icp.pem 2>/dev/null | grep -E 'Verify return code' | sed 's/^/::notice title=verify::/'
-      - name: WSDL verificando com ICP
-        run: |
-          for s in NFCeListagemChaves NFCeDownloadXML; do
-            code=$(curl -s --cacert icp.pem -o $s.wsdl -w '%{http_code}' "https://nfce.fazenda.sp.gov.br/ws/$s.asmx?wsdl"); rc=$?
-            echo "::notice title=$s::curl=$rc HTTP=$code"
-            [ -s $s.wsdl ] || curl -sk -o $s.wsdl "https://nfce.fazenda.sp.gov.br/ws/$s.asmx?wsdl"
-            python3 - "$s" <<'PY'
+          curl -sL -o x.zip "https://portal.fazenda.sp.gov.br/servicos/nfce/Documents/xsd_nfceListagemChaves_nfceDownloadXML.zip" || curl -skL -o x.zip "https://portal.fazenda.sp.gov.br/servicos/nfce/Documents/xsd_nfceListagemChaves_nfceDownloadXML.zip"
+          mkdir x && unzip -qo x.zip -d x; echo "::notice title=arquivos::$(find x -type f | tr '\n' ' ')"
+          for f in $(find x -type f -name '*.xsd' | grep -iv -E 'xmldsig|tiposBasico|leiaute|nfe_v'); do
+            python3 - "$f" <<'PY'
           import sys,re
-          s=sys.argv[1]; t=open(s+'.wsdl',encoding='utf-8',errors='replace').read()
-          tns=re.findall(r'targetNamespace="([^"]+)"',t)
-          ops=sorted(set(re.findall(r'operation name="([^"]+)"',t)))
-          acts=sorted(set(re.findall(r'soapAction="([^"]*)"',t)))
-          els=re.findall(r'element name="([^"]+)"',t)[:12]
-          soap12='soap12' in t
-          snippet=re.sub(r'\s+',' ',t[:800]) if not tns else ''
-          msg=f"tns={tns} ops={ops} actions={acts} elements={els} soap12={soap12} {snippet}"
-          print(f"::notice title={s} wsdl::"+msg.replace('%','%25').replace('\n',' ')[:3000])
+          f=sys.argv[1]; t=open(f,encoding='utf-8',errors='replace').read()
+          t=re.sub(r'<xs:annotation>.*?</xs:annotation>','',t,flags=re.S)
+          t=re.sub(r'\s+',' ',t)
+          print(f"::notice title={f.split('/')[-1]}::"+t.replace('%','%25')[:3500])
           PY
           done
