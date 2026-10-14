@@ -6,20 +6,34 @@ jobs:
   wsdl:
     runs-on: ubuntu-latest
     steps:
-      - name: WSDL
+      - name: Cadeia do servidor
+        run: |
+          echo | openssl s_client -connect nfce.fazenda.sp.gov.br:443 -servername nfce.fazenda.sp.gov.br -showcerts 2>/dev/null | grep -E '^ *[0-9] s:|i:' | tr '\n' ' ' | sed 's/^/::notice title=cadeia::/'; echo
+      - name: Baixar raízes ICP-Brasil
+        run: |
+          for u in https://acraiz.icpbrasil.gov.br/credenciadas/CertificadosAC-ICP-Brasil/ACcompactado.zip http://acraiz.icpbrasil.gov.br/credenciadas/CertificadosAC-ICP-Brasil/ACcompactado.zip; do
+            code=$(curl -sL -o ac.zip -w '%{http_code}' "$u"); echo "::notice title=zip $u::HTTP $code $(wc -c < ac.zip 2>/dev/null) bytes ($?)"
+            [ "$code" = 200 ] && break
+          done
+          mkdir -p ac && unzip -qo ac.zip -d ac 2>/dev/null; echo "::notice title=arquivos::$(ls ac | head -40 | tr '\n' ' ') total=$(ls ac | wc -l)"
+          cat ac/* > icp.pem 2>/dev/null; for f in ac/*; do openssl x509 -in "$f" -noout 2>/dev/null || openssl x509 -inform der -in "$f" -out /dev/stdout >> icp.pem 2>/dev/null; done
+          echo "::notice title=pem::$(grep -c BEGIN icp.pem) certificados"
+      - name: WSDL verificando com ICP
         run: |
           for s in NFCeListagemChaves NFCeDownloadXML; do
-            code=$(curl -s -o $s.wsdl -w '%{http_code}' "https://nfce.fazenda.sp.gov.br/ws/$s.asmx?wsdl")
-            echo "::notice title=$s HTTP::$code $(wc -c < $s.wsdl) bytes"
+            code=$(curl -s --cacert icp.pem -o $s.wsdl -w '%{http_code}' "https://nfce.fazenda.sp.gov.br/ws/$s.asmx?wsdl"); rc=$?
+            echo "::notice title=$s::curl=$rc HTTP=$code"
+            [ -s $s.wsdl ] || curl -sk -o $s.wsdl "https://nfce.fazenda.sp.gov.br/ws/$s.asmx?wsdl"
             python3 - "$s" <<'PY'
           import sys,re
           s=sys.argv[1]; t=open(s+'.wsdl',encoding='utf-8',errors='replace').read()
           tns=re.findall(r'targetNamespace="([^"]+)"',t)
-          ops=sorted(set(re.findall(r'<wsdl:operation name="([^"]+)"',t)))
+          ops=sorted(set(re.findall(r'operation name="([^"]+)"',t)))
           acts=sorted(set(re.findall(r'soapAction="([^"]*)"',t)))
-          els=re.findall(r'<s:element name="([^"]+)"[^>]*>',t)[:12]
-          snippet=re.sub(r'\s+',' ',t[:1500]) if not tns else ''
-          msg=f"tns={tns} ops={ops} actions={acts} elements={els} {snippet}"
-          print(f"::notice title={s}::"+msg.replace('%','%25').replace('\n',' ')[:3000])
+          els=re.findall(r'element name="([^"]+)"',t)[:12]
+          soap12='soap12' in t
+          snippet=re.sub(r'\s+',' ',t[:800]) if not tns else ''
+          msg=f"tns={tns} ops={ops} actions={acts} elements={els} soap12={soap12} {snippet}"
+          print(f"::notice title={s} wsdl::"+msg.replace('%','%25').replace('\n',' ')[:3000])
           PY
           done
