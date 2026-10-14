@@ -1,6 +1,0 @@
-{
-  "name": "onion-cost-sefaz-proxy",
-  "private": true,
-  "description": "Intermediário Node.js para a SEFAZ (NFeDistribuicaoDFe) usado pela função nfe do Supabase",
-  "engines": { "node": ">=20" }
-}
