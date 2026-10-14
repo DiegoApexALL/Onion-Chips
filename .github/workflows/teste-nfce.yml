@@ -9,15 +9,16 @@ jobs:
       - name: Cadeia do servidor
         run: |
           echo | openssl s_client -connect nfce.fazenda.sp.gov.br:443 -servername nfce.fazenda.sp.gov.br -showcerts 2>/dev/null | grep -E '^ *[0-9] s:|i:' | tr '\n' ' ' | sed 's/^/::notice title=cadeia::/'; echo
-      - name: Baixar raízes ICP-Brasil
+      - name: Raiz ICP-Brasil v10 (conferida pela impressão digital da Microsoft)
         run: |
-          for u in https://acraiz.icpbrasil.gov.br/credenciadas/CertificadosAC-ICP-Brasil/ACcompactado.zip http://acraiz.icpbrasil.gov.br/credenciadas/CertificadosAC-ICP-Brasil/ACcompactado.zip; do
-            code=$(curl -sL -o ac.zip -w '%{http_code}' "$u"); echo "::notice title=zip $u::HTTP $code $(wc -c < ac.zip 2>/dev/null) bytes ($?)"
-            [ "$code" = 200 ] && break
-          done
-          mkdir -p ac && unzip -qo ac.zip -d ac 2>/dev/null; echo "::notice title=arquivos::$(ls ac | head -40 | tr '\n' ' ') total=$(ls ac | wc -l)"
-          cat ac/* > icp.pem 2>/dev/null; for f in ac/*; do openssl x509 -in "$f" -noout 2>/dev/null || openssl x509 -inform der -in "$f" -out /dev/stdout >> icp.pem 2>/dev/null; done
-          echo "::notice title=pem::$(grep -c BEGIN icp.pem) certificados"
+          curl -sk -o v10.crt https://acraiz.icpbrasil.gov.br/credenciadas/RAIZ/ICP-Brasilv10.crt
+          openssl x509 -in v10.crt -out icp.pem 2>/dev/null || openssl x509 -inform der -in v10.crt -out icp.pem
+          FP1=$(openssl x509 -in icp.pem -noout -fingerprint -sha1 | cut -d= -f2 | tr -d :)
+          FP256=$(openssl x509 -in icp.pem -noout -fingerprint -sha256 | cut -d= -f2 | tr -d :)
+          echo "::notice title=v10::sha1=$FP1 sha256=$FP256"
+          test "$FP1" = "6C155ED7271A904A0DC040F0C857FF53BF6DB290"
+          # intermediária enviada pelo servidor
+          echo | openssl s_client -connect nfce.fazenda.sp.gov.br:443 -servername nfce.fazenda.sp.gov.br -CAfile icp.pem 2>/dev/null | grep -E 'Verify return code' | sed 's/^/::notice title=verify::/'
       - name: WSDL verificando com ICP
         run: |
           for s in NFCeListagemChaves NFCeDownloadXML; do
