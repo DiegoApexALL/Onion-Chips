@@ -1,0 +1,30 @@
+name: Notas fiscais (SEFAZ)
+
+# Consulta a SEFAZ para as empresas cadastradas no app (aba Empresas).
+# Roda a cada 15 minutos; a função do Supabase só devolve empresas cuja próxima
+# consulta já está liberada (a SEFAZ permite uma consulta sem novidades por hora).
+# Não usa senha: o GitHub entrega um token OIDC que a função confere.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: sefaz-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/sefaz-sync.mjs

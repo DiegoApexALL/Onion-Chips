@@ -235,7 +235,7 @@ function CompanyCard({ company: c, month, info, onEdit, onRemove, onChanged, onE
 
   async function consult() {
     setConsulting(true)
-    setStatus('Consultando a SEFAZ…')
+    setStatus('Buscando os dados mais recentes…')
     try {
       let res: { status: string; pending: boolean; fetched: number }
       let rounds = 0
@@ -245,7 +245,7 @@ function CompanyCard({ company: c, month, info, onEdit, onRemove, onChanged, onE
         fetched += res.fetched
         if (res.pending) setStatus(`Baixando notas… ${fetched} até agora`)
       } while (res.pending && ++rounds < 5)
-      setStatus(res.status + (fetched ? ` ${fetched} nota(s) nova(s) recebida(s).` : ''))
+      setStatus(null)
       setNotes(null)
       await onChanged()
     } catch (e) {
@@ -288,17 +288,18 @@ function CompanyCard({ company: c, month, info, onEdit, onRemove, onChanged, onE
         {c.last_sync_at && (
           <div className="muted small">
             Atualizado {dateTime(c.last_sync_at)}
-            {waitUntil && ` · nova consulta na SEFAZ a partir de ${time(waitUntil)}`}
+            {waitUntil && ` · próxima atualização automática a partir de ${time(waitUntil)}`}
           </div>
         )}
-        {!c.last_sync_at && certOk && <div className="muted small">Ainda não consultado.</div>}
+        {c.last_status && <div className="small">{c.last_status}</div>}
+        {!c.last_sync_at && certOk && <div className="muted small">A primeira consulta à SEFAZ acontece automaticamente em até 15 minutos.</div>}
       </div>
 
       {status && <div className="hint">{status}</div>}
 
       <div className="actions start">
         <button className="primary" disabled={consulting || !certOk} onClick={consult}>
-          {consulting ? 'Consultando…' : 'Consultar notas do mês'}
+          {consulting ? 'Atualizando…' : 'Atualizar'}
         </button>
         {(info?.count || info?.cancelled) ? (
           <button className="ghost" onClick={toggleNotes}>{notes ? 'Esconder notas' : 'Ver notas'}</button>

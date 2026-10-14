@@ -3,17 +3,23 @@
 // Ações (POST JSON, usuário logado no app):
 //   { action: "save-cert",   company_id, pfx (base64), password }  → guarda o certificado A1 criptografado
 //   { action: "remove-cert", company_id }                           → apaga o certificado
-//   { action: "consult",     company_id }                           → busca novidades na SEFAZ e resume o mês
+//   { action: "consult",     company_id }                           → resumo do mês e situação da sincronização
 //
-// Segredos opcionais (Supabase > Edge Functions > Secrets):
+// A consulta à SEFAZ em si roda no GitHub Actions (.github/workflows/sefaz-sync.yml), porque a SEFAZ
+// pede o certificado por renegociação TLS, que o Deno (rustls) não suporta e o Node (OpenSSL) sim.
+// O workflow se identifica com o token OIDC do GitHub (sem senha guardada) e usa:
+//   { action: "sync-jobs" }                                          → empresas a sincronizar (com certificado)
+//   { action: "sync-ingest", company_id, response? | error? }        → grava uma resposta da SEFAZ
+//
+// Segredo opcional (Supabase > Edge Functions > Secrets):
 //   CERT_SECRET   — chave usada para criptografar os certificados (se faltar, usa a service role key)
-//   SEFAZ_PROXY_URL / SEFAZ_PROXY_SECRET — intermediário Node na Vercel (ou na tabela app_secrets)
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import {
-  buildEnvelope, currentMonth, gunzipBase64, parseDoc, parseRet, type ParsedDoc,
+  currentMonth, gunzipBase64, parseDoc, parseRet, type ParsedDoc,
 } from './sefaz.ts'
-import { type Pem, readPfx, UserError } from './cert.ts'
+import { readPfx, UserError } from './cert.ts'
+import { createRemoteJWKSet, jwtVerify } from 'npm:jose@5.9.6'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -33,6 +39,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'Use POST' }, 405)
   try {
+    const gh = req.headers.get('x-github-oidc')
+    if (gh) return json(await githubSync(gh, await req.json().catch(() => ({}))))
+
     const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
     const auth = token ? await admin.auth.getUser(token) : null
     if (!auth || auth.error || !auth.data.user) return json({ error: 'Entre no app para usar esta função.' }, 401)
@@ -115,112 +124,118 @@ function fmtCnpj(c: string) {
   return c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
 }
 
-// ---------------- SEFAZ ----------------
-
-// A SEFAZ pede o certificado por renegociação TLS, que o Deno (rustls) não suporta.
-// Por isso a chamada passa por um intermediário Node.js (pasta sefaz-proxy, publicado na Vercel).
-// Endereço e senha ficam em app_secrets (tabela sem acesso pelo app) ou nos segredos da função.
-async function proxyConfig(): Promise<{ url: string; secret: string }> {
-  let url = Deno.env.get('SEFAZ_PROXY_URL') ?? ''
-  let secret = Deno.env.get('SEFAZ_PROXY_SECRET') ?? ''
-  if (!url || !secret) {
-    const { data } = await admin.from('app_secrets').select('name, value').in('name', ['sefaz_proxy_url', 'sefaz_proxy_secret'])
-    for (const r of data ?? []) {
-      if (r.name === 'sefaz_proxy_url' && !url) url = r.value
-      if (r.name === 'sefaz_proxy_secret' && !secret) secret = r.value
-    }
-  }
-  if (!url || !secret) throw new UserError('O intermediário da SEFAZ (Vercel) ainda não foi configurado.')
-  return { url: url.replace(/\/+$/, ''), secret }
-}
-
-async function sefazPost(pem: Pem, xml: string): Promise<string> {
-  const { url, secret } = await proxyConfig()
-  let res: Response
-  try {
-    res = await fetch(`${url}/api/sefaz`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-proxy-secret': secret },
-      body: JSON.stringify({ cert: pem.cert, key: pem.key, xml }),
-      signal: AbortSignal.timeout(55_000),
-    })
-  } catch (e) {
-    throw new Error(`Não foi possível falar com o intermediário da SEFAZ: ${(e as Error).message}`)
-  }
-  const out = await res.json().catch(() => ({})) as { status?: number; body?: string; error?: string }
-  if (res.status === 401) throw new Error('O intermediário da SEFAZ recusou a senha (confira PROXY_SECRET na Vercel).')
-  if (!res.ok || out.error) throw new Error(`Falha na conexão com a SEFAZ: ${out.error ?? `HTTP ${res.status}`}`)
-  return checkHttp({ status: Number(out.status), body: String(out.body ?? '') })
-}
-
-function checkHttp(res: { status: number; body: string }): string {
-  if (res.status === 403) throw new UserError('A SEFAZ recusou o certificado (HTTP 403). Confira se ele é um e-CNPJ A1 válido.')
-  if (res.status !== 200 && !res.body.includes('retDistDFeInt')) {
-    throw new Error(`SEFAZ respondeu HTTP ${res.status}: ${res.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300)}`)
-  }
-  return res.body
-}
+// ---------------- SEFAZ (via GitHub Actions) ----------------
 
 const HOUR = 60 * 60 * 1000
-const MAX_CALLS = 20 // até ~1000 documentos por clique
+const GH_REPO = 'DiegoApexALL/Onion-Chips'
+const GH_REF = 'refs/heads/claude/onion-cost-app-clone-qdy4s1'
+const GH_AUDIENCE = 'onion-cost'
+const ghKeys = createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'))
 
-async function consult(sb: SupabaseClient, company: Company) {
-  const now = Date.now()
-  let status = ''
-  let pending = false
-  let fetched = 0
+/** Confere o token OIDC: só o workflow deste repositório, na branch principal, agendado ou manual. */
+async function verifyGithub(token: string) {
+  const { payload } = await jwtVerify(token, ghKeys, {
+    issuer: 'https://token.actions.githubusercontent.com',
+    audience: GH_AUDIENCE,
+  })
+  const ok = String(payload.repository).toLowerCase() === GH_REPO.toLowerCase() &&
+    payload.ref === GH_REF &&
+    ['schedule', 'workflow_dispatch'].includes(String(payload.event_name)) &&
+    String(payload.workflow_ref ?? '').includes('/.github/workflows/sefaz-sync.yml@')
+  if (!ok) throw new UserError('Token do GitHub não autorizado.')
+}
 
-  const waitUntil = company.next_sync_at ? new Date(company.next_sync_at).getTime() : 0
-  if (waitUntil > now) {
-    status = 'Dados já atualizados há pouco. A SEFAZ só permite nova consulta depois do horário indicado.'
-  } else {
-    const { data: certRow } = await sb.from('company_certs').select('payload').eq('company_id', company.id).maybeSingle()
-    if (!certRow) throw new UserError('Envie o certificado digital A1 desta empresa antes de consultar.')
-    const { pfx, password } = await decrypt<{ pfx: string; password: string }>(certRow.payload)
-    const pem = readPfx(pfx, password)
+async function githubSync(token: string, body: Record<string, unknown>) {
+  try {
+    await verifyGithub(token)
+  } catch (e) {
+    throw e instanceof UserError ? e : new UserError(`Token do GitHub inválido: ${(e as Error).message}`)
+  }
+  if (body.action === 'sync-jobs') return { jobs: await syncJobs() }
+  if (body.action === 'sync-ingest') return await syncIngest(String(body.company_id ?? ''), body)
+  throw new UserError('Ação desconhecida.')
+}
 
-    let ult = Number(company.last_nsu) || 0
-    let max = Number(company.max_nsu) || 0
-    let nextSync: string | null = null
+async function syncJobs() {
+  const now = new Date().toISOString()
+  const { data, error } = await admin.from('companies')
+    .select('id, cnpj, uf, last_nsu, next_sync_at')
+    .or(`next_sync_at.is.null,next_sync_at.lte.${now}`)
+  if (error) throw error
+  const jobs = []
+  for (const c of data ?? []) {
+    const { data: row } = await admin.from('company_certs').select('payload').eq('company_id', c.id).maybeSingle()
+    if (!row) continue
     try {
-      for (let i = 0; i < MAX_CALLS; i++) {
-        const ret = parseRet(await sefazPost(pem, buildEnvelope(company.cnpj, company.uf, ult)))
-        if (ret.cStat === 137) { // nenhum documento novo
-          if (ret.ultNSU) ult = ret.ultNSU
-          if (ret.maxNSU) max = ret.maxNSU
-          nextSync = new Date(now + HOUR).toISOString()
-          status = 'Atualizado. Nenhuma nota nova na SEFAZ.'
-          break
-        }
-        if (ret.cStat === 656) { // consumo indevido: bloqueio de 1 hora
-          nextSync = new Date(now + HOUR).toISOString()
-          status = 'A SEFAZ pediu para aguardar 1 hora antes de consultar de novo (consumo indevido).'
-          break
-        }
-        if (ret.cStat !== 138) throw new UserError(`SEFAZ: ${ret.cStat} - ${ret.xMotivo}`)
-        fetched += await saveDocs(sb, company.id, ret.docs)
-        ult = ret.ultNSU
-        max = ret.maxNSU
-        if (ult >= max) {
-          nextSync = new Date(now + HOUR).toISOString()
-          status = 'Atualizado com a SEFAZ.'
-          break
-        }
-        if (i === MAX_CALLS - 1) {
-          pending = true
-          status = 'Ainda há notas para baixar. Toque em Consultar de novo para continuar.'
-        }
+      const { pfx, password } = await decrypt<{ pfx: string; password: string }>(row.payload)
+      const pem = readPfx(pfx, password)
+      if (pem.notAfter.getTime() < Date.now()) {
+        await admin.from('companies').update({ last_status: 'Certificado vencido: envie o novo para continuar.' }).eq('id', c.id)
+        continue
       }
-    } finally {
-      await sb.from('companies').update({
-        last_nsu: ult, max_nsu: max, last_sync_at: new Date().toISOString(),
-        ...(nextSync ? { next_sync_at: nextSync } : {}), last_status: status || null,
-      }).eq('id', company.id)
+      jobs.push({ company_id: c.id, cnpj: c.cnpj, uf: c.uf, last_nsu: Number(c.last_nsu) || 0, cert: pem.cert, key: pem.key })
+    } catch (e) {
+      await admin.from('companies').update({ last_status: `Erro no certificado: ${(e as Error).message}` }).eq('id', c.id)
     }
   }
+  return jobs
+}
 
-  const { data: refreshed } = await sb.from('companies').select('last_sync_at, next_sync_at').eq('id', company.id).single()
-  return { status, pending, fetched, ...(await monthSummary(sb, company.id)), ...refreshed }
+/** Grava uma resposta da SEFAZ e diz ao workflow se deve continuar e com qual NSU. */
+async function syncIngest(companyId: string, body: Record<string, unknown>) {
+  const { data: company, error } = await admin.from('companies').select('*').eq('id', companyId).maybeSingle()
+  if (error) throw error
+  if (!company) throw new UserError('Empresa não encontrada.')
+  const nowIso = new Date().toISOString()
+  const later = new Date(Date.now() + HOUR).toISOString()
+  const save = (fields: Record<string, unknown>) => admin.from('companies').update({ last_sync_at: nowIso, ...fields }).eq('id', companyId)
+
+  if (body.error) {
+    const msg = String(body.error).slice(0, 300)
+    await save({ next_sync_at: later, last_status: `Erro ao consultar a SEFAZ: ${msg}` })
+    return { done: true }
+  }
+  let ret
+  try {
+    ret = parseRet(String(body.response ?? ''))
+  } catch (e) {
+    await save({ next_sync_at: later, last_status: (e as Error).message })
+    return { done: true }
+  }
+  if (ret.cStat === 137) {
+    await save({
+      last_nsu: ret.ultNSU || company.last_nsu, max_nsu: ret.maxNSU || company.max_nsu,
+      next_sync_at: later, last_status: 'Atualizado. Nenhuma nota nova na SEFAZ.',
+    })
+    return { done: true }
+  }
+  if (ret.cStat === 656) {
+    await save({ next_sync_at: later, last_status: 'A SEFAZ pediu para aguardar 1 hora (consumo indevido).' })
+    return { done: true }
+  }
+  if (ret.cStat !== 138) {
+    await save({ next_sync_at: later, last_status: `SEFAZ: ${ret.cStat} - ${ret.xMotivo}` })
+    return { done: true }
+  }
+  const fetched = await saveDocs(admin, companyId, ret.docs)
+  const done = ret.ultNSU >= ret.maxNSU
+  await save({
+    last_nsu: ret.ultNSU, max_nsu: ret.maxNSU,
+    ...(done ? { next_sync_at: later } : {}),
+    last_status: done ? 'Atualizado com a SEFAZ.' : 'Baixando notas da SEFAZ…',
+  })
+  return { done, ult_nsu: ret.ultNSU, fetched }
+}
+
+/** Botão "Consultar" do app: mostra o que já foi sincronizado. */
+async function consult(sb: SupabaseClient, company: Company) {
+  const { data: certRow } = await sb.from('company_certs').select('company_id').eq('company_id', company.id).maybeSingle()
+  if (!certRow) throw new UserError('Envie o certificado digital A1 desta empresa antes de consultar.')
+  const { data: c } = await sb.from('companies').select('last_sync_at, next_sync_at, last_status').eq('id', company.id).single()
+  const status = c?.last_sync_at
+    ? (c.last_status ?? 'Atualizado.')
+    : 'Certificado recebido. A primeira consulta à SEFAZ acontece automaticamente em até 15 minutos.'
+  return { status, pending: false, fetched: 0, ...(await monthSummary(sb, company.id)), ...c }
 }
 
 async function saveDocs(sb: SupabaseClient, companyId: string, docs: { nsu: number; schema: string; b64: string }[]) {

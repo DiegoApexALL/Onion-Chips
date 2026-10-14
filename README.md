@@ -54,20 +54,20 @@ notas dos últimos ~90 dias.
    com uma senha longa qualquer. Ela criptografa os certificados guardados.
    Se for trocar depois, envie os certificados de novo.
 4. No app, abra **Empresas**, cadastre o CNPJ e a UF, toque em **Certificado** e
-   envie o arquivo `.pfx` com a senha. Depois toque em **Consultar notas do mês**.
+   envie o arquivo `.pfx` com a senha. As notas aparecem sozinhas em até 15 minutos.
 
-### Intermediário da SEFAZ (Vercel)
+### Consulta automática (GitHub Actions)
 
 A SEFAZ pede o certificado no meio da conexão (renegociação TLS), e o ambiente do
-Supabase não sabe fazer isso. Por isso a chamada passa por uma função Node.js bem
-pequena na pasta [`sefaz-proxy`](sefaz-proxy), publicada de graça na Vercel em São
-Paulo (`gru1`). Ela só repassa o pedido e não guarda nada.
+Supabase não sabe fazer isso. Por isso a consulta roda no GitHub Actions
+([`.github/workflows/sefaz-sync.yml`](.github/workflows/sefaz-sync.yml), script em
+[`scripts/sefaz-sync.mjs`](scripts/sefaz-sync.mjs)) a cada 15 minutos. O workflow pede à
+função `nfe` as empresas com consulta liberada, fala com a SEFAZ e devolve as respostas
+para a função gravar. Não há senha: a função confere o token OIDC que o GitHub emite
+para este repositório. Nada sensível aparece no log.
 
-1. Em https://vercel.com, entre com a conta do GitHub e clique em **Add New → Project**.
-2. Importe este repositório e, em **Root Directory**, escolha `sefaz-proxy`.
-3. Em **Environment Variables**, crie `PROXY_SECRET` com uma senha longa e clique em **Deploy**.
-4. No Supabase, grave o endereço e a mesma senha na tabela `app_secrets`
-   (`sefaz_proxy_url` e `sefaz_proxy_secret`, veja o fim de `supabase/empresas.sql`).
+Observação: o GitHub pausa agendamentos de repositórios públicos sem atividade por 60
+dias. Se isso acontecer, reative em **Actions → Notas fiscais (SEFAZ) → Enable workflow**.
 
 ## Publicar grátis (Vercel ou Netlify)
 
