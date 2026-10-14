@@ -1,0 +1,37 @@
+name: Teste SEFAZ (temporário)
+on:
+  push:
+    branches: [claude/teste-sefaz-runner]
+jobs:
+  teste:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Conexão com a SEFAZ
+        run: |
+          cat > t.js <<'JS'
+          const https = require('node:https')
+          const body = '<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe"><nfeDadosMsg><distDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01"><tpAmb>1</tpAmb><cUFAutor>35</cUFAutor><CNPJ>00000000000191</CNPJ><distNSU><ultNSU>000000000000000</ultNSU></distNSU></distDFeInt></nfeDadosMsg></nfeDistDFeInteresse></soap12:Body></soap12:Envelope>'
+          const t = Date.now()
+          const req = https.request({ host: 'www1.nfe.fazenda.gov.br', path: '/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx', method: 'POST', agent: false, maxVersion: 'TLSv1.2', timeout: 30000,
+            headers: { 'Content-Type': 'application/soap+xml; charset=utf-8', 'Content-Length': Buffer.byteLength(body) } }, (res) => {
+            let d = ''; res.on('data', c => d += c); res.on('end', () => {
+              const msg = `HTTP ${res.statusCode} em ${Date.now()-t}ms: ${d.replace(/\s+/g,' ').slice(0,300)}`
+              console.log(msg); console.log(`::notice title=SEFAZ::${msg.replace(/[\r\n%]/g,' ')}`)
+            })
+          })
+          req.on('error', e => { console.log(`::notice title=SEFAZ erro::${e.code} ${e.message} em ${Date.now()-t}ms`) })
+          req.on('timeout', () => req.destroy(new Error('timeout')))
+          req.end(body)
+          JS
+          node t.js
+          IP=$(curl -s https://api.ipify.org); echo "::notice title=IP::$IP"
+      - name: Token OIDC disponível
+        run: |
+          T=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=onion-cost" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['value']))")
+          echo "::notice title=OIDC::token com $T caracteres"
