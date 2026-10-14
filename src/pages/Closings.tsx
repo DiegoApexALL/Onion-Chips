@@ -225,17 +225,25 @@ function ImportView({ onCancel, onRead }: { onCancel: () => void; onRead: (texto
   )
 }
 
+const fmt2 = (v: number) => (v ? v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '')
+const parseBR = (t: string) => {
+  const v = Number(t.replace(/\./g, '').replace(',', '.'))
+  return Number.isFinite(v) ? v : 0
+}
+
 function NumInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const [txt, setTxt] = useState(value ? String(value).replace('.', ',') : '')
+  const [txt, setTxt] = useState(fmt2(value))
+  const [editing, setEditing] = useState(false)
   useEffect(() => {
-    setTxt((t) => (Number(t.replace(/\./g, '').replace(',', '.')) === value ? t : value ? String(value).replace('.', ',') : ''))
-  }, [value])
+    if (!editing) setTxt(fmt2(value))
+  }, [value, editing])
   return (
     <input inputMode="decimal" value={txt} placeholder="0,00"
+      onFocus={() => setEditing(true)}
+      onBlur={() => { setEditing(false); setTxt(fmt2(parseBR(txt))) }}
       onChange={(e) => {
         setTxt(e.target.value)
-        const v = Number(e.target.value.replace(/\./g, '').replace(',', '.'))
-        onChange(Number.isFinite(v) ? v : 0)
+        onChange(parseBR(e.target.value))
       }} />
   )
 }
