@@ -4,18 +4,20 @@ import type { Session } from '@supabase/supabase-js'
 import { initStore, loadExamples, store, supabase, type StoreMode } from './lib/store'
 import { DEFAULT_SETTINGS, type Ingredient, type Recipe, type Settings } from './lib/types'
 import Auth from './pages/Auth'
+import Closings from './pages/Closings'
 import Companies from './pages/Companies'
 import Dashboard from './pages/Dashboard'
 import Ingredients from './pages/Ingredients'
 import Recipes from './pages/Recipes'
 
-type Tab = 'dashboard' | 'ingredients' | 'recipes' | 'companies'
+type Tab = 'dashboard' | 'ingredients' | 'recipes' | 'closings' | 'companies'
 const isApp = Capacitor.isNativePlatform()
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'dashboard', label: 'Painel' },
   { id: 'ingredients', label: 'Ingredientes' },
   { id: 'recipes', label: 'Receitas' },
+  { id: 'closings', label: 'Fechamentos' },
   { id: 'companies', label: 'Empresas' },
 ]
 
@@ -113,6 +115,7 @@ export default function App() {
         {tab === 'recipes' && (
           <Recipes ingredients={ingredients} recipes={recipes} settings={settings} reload={reload} onError={setError} />
         )}
+        {tab === 'closings' && <Closings onError={setError} />}
         {tab === 'companies' && <Companies onError={setError} />}
       </main>
     </div>
