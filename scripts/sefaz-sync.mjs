@@ -167,17 +167,25 @@ async function syncNfce(token, job, i) {
       job.nfce.downloads = again?.nfce?.downloads ?? []
     }
   }
-  for (const chave of job.nfce.downloads) {
-    try {
-      const response = await nfceCall(job, 'NFCeDownloadXML',
-        `<nfceDownloadXML versao="1.00" xmlns="${NFE_NS}"><tpAmb>1</tpAmb><chNFCe>${chave}</chNFCe></nfceDownloadXML>`)
-      const r = await callFn(token, { action: 'nfce-xml-ingest', company_id: job.company_id, chave, response })
-      if (r.ok) downloaded++
-      if (r.stop) break
-    } catch (e) {
-      await callFn(token, { action: 'nfce-xml-ingest', company_id: job.company_id, chave, error: e.message }).catch(() => {})
+  // Até 3 lotes de 20 XMLs por execução; para se a SEFAZ-SP pedir para aguardar
+  let downloads = job.nfce.downloads
+  for (let lote = 0; lote < 3 && downloads.length; lote++) {
+    let stop = false
+    for (const chave of downloads) {
+      try {
+        const response = await nfceCall(job, 'NFCeDownloadXML',
+          `<nfceDownloadXML versao="1.00" xmlns="${NFE_NS}"><tpAmb>1</tpAmb><chNFCe>${chave}</chNFCe></nfceDownloadXML>`)
+        const r = await callFn(token, { action: 'nfce-xml-ingest', company_id: job.company_id, chave, response })
+        if (r.ok) downloaded++
+        if (r.stop) { stop = true; break }
+      } catch (e) {
+        await callFn(token, { action: 'nfce-xml-ingest', company_id: job.company_id, chave, error: e.message }).catch(() => {})
+      }
+      await sleep(2000)
     }
-    await sleep(3000)
+    if (stop || downloads.length < 20) break
+    const again = (await callFn(token, { action: 'sync-jobs' })).jobs.find((j) => j.company_id === job.company_id)
+    downloads = again?.nfce?.downloads ?? []
   }
   console.log(`empresa ${i + 1}: NFC-e ${listed} chave(s) listada(s), ${downloaded} XML(s) baixado(s)`)
 }

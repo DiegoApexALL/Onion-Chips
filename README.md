@@ -61,7 +61,7 @@ notas dos últimos ~90 dias.
 Para empresas de SP, o mesmo workflow usa o serviço **SAE-NFC-e** da SEFAZ-SP
 (`NFCeListagemChaves` e `NFCeDownloadXML`) para listar as NFC-e emitidas pelo CNPJ e
 baixar o XML de cada uma. A quantidade aparece logo; o valor vai sendo completado aos
-poucos (20 notas a cada 15 minutos, começando pelo mês atual), por causa do limite de
+poucos (até 60 notas por execução, começando pelo mês atual), por causa do limite de
 consultas da SEFAZ-SP. A SEFAZ-SP guarda cerca de 100 dias.
 
 ### Consulta automática (GitHub Actions)
