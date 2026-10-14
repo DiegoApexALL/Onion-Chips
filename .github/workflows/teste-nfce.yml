@@ -1,0 +1,25 @@
+name: Teste NFC-e SP (temporário)
+on:
+  push:
+    branches: [claude/teste-nfce-wsdl]
+jobs:
+  wsdl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: WSDL
+        run: |
+          for s in NFCeListagemChaves NFCeDownloadXML; do
+            code=$(curl -s -o $s.wsdl -w '%{http_code}' "https://nfce.fazenda.sp.gov.br/ws/$s.asmx?wsdl")
+            echo "::notice title=$s HTTP::$code $(wc -c < $s.wsdl) bytes"
+            python3 - "$s" <<'PY'
+          import sys,re
+          s=sys.argv[1]; t=open(s+'.wsdl',encoding='utf-8',errors='replace').read()
+          tns=re.findall(r'targetNamespace="([^"]+)"',t)
+          ops=sorted(set(re.findall(r'<wsdl:operation name="([^"]+)"',t)))
+          acts=sorted(set(re.findall(r'soapAction="([^"]*)"',t)))
+          els=re.findall(r'<s:element name="([^"]+)"[^>]*>',t)[:12]
+          snippet=re.sub(r'\s+',' ',t[:1500]) if not tns else ''
+          msg=f"tns={tns} ops={ops} actions={acts} elements={els} {snippet}"
+          print(f"::notice title={s}::"+msg.replace('%','%25').replace('\n',' ')[:3000])
+          PY
+          done
