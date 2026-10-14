@@ -15,9 +15,12 @@ interface Company {
   last_sync_at: string | null
   next_sync_at: string | null
   last_status: string | null
+  nfce_sync_at: string | null
+  nfce_status: string | null
 }
 
 interface MonthInfo { count: number; total: number; cancelled: number }
+interface NfceInfo { quantidade: number; canceladas: number; baixadas: number; total_chaves: number; valor: number }
 interface Note { chave: string; emit_doc: string | null; emit_nome: string | null; dh_emi: string | null; valor: number | null; situacao: string }
 
 const onlyDigits = (s: string) => s.replace(/\D/g, '')
@@ -93,6 +96,7 @@ const emptyForm = { name: '', cnpj: '', uf: 'SP' }
 export default function Companies({ onError }: { onError: (msg: string) => void }) {
   const [companies, setCompanies] = useState<Company[]>([])
   const [months, setMonths] = useState<Record<string, MonthInfo>>({})
+  const [nfce, setNfce] = useState<Record<string, NfceInfo>>({})
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -102,12 +106,21 @@ export default function Companies({ onError }: { onError: (msg: string) => void 
   const load = useCallback(async () => {
     if (!supabase) return
     try {
-      const [c, d] = await Promise.all([
+      const [c, d, e] = await Promise.all([
         supabase.from('companies').select('*').order('name'),
         supabase.from('nfe_docs').select('company_id, valor, situacao').eq('competencia', month),
+        supabase.from('nfce_resumo').select('*').eq('competencia', month),
       ])
       if (c.error) throw c.error
       if (d.error) throw d.error
+      const nf: Record<string, NfceInfo> = {}
+      for (const r of e.data ?? []) {
+        nf[r.company_id] = {
+          quantidade: Number(r.quantidade), canceladas: Number(r.canceladas), baixadas: Number(r.baixadas),
+          total_chaves: Number(r.total_chaves), valor: Number(r.valor),
+        }
+      }
+      setNfce(nf)
       setCompanies(c.data ?? [])
       const m: Record<string, MonthInfo> = {}
       for (const n of d.data ?? []) {
@@ -207,7 +220,7 @@ export default function Companies({ onError }: { onError: (msg: string) => void 
         <h2>Empresas ({companies.length})</h2>
         {loaded && companies.length === 0 && <p className="card muted">Nenhuma empresa cadastrada.</p>}
         {companies.map((c) => (
-          <CompanyCard key={c.id} company={c} month={month} info={months[c.id]} onEdit={() => edit(c)}
+          <CompanyCard key={c.id} company={c} month={month} info={months[c.id]} nfce={nfce[c.id]} onEdit={() => edit(c)}
             onRemove={() => remove(c)} onChanged={load} onError={onError} />
         ))}
       </section>
@@ -215,10 +228,11 @@ export default function Companies({ onError }: { onError: (msg: string) => void 
   )
 }
 
-function CompanyCard({ company: c, month, info, onEdit, onRemove, onChanged, onError }: {
+function CompanyCard({ company: c, month, info, nfce, onEdit, onRemove, onChanged, onError }: {
   company: Company
   month: string
   info?: MonthInfo
+  nfce?: NfceInfo
   onEdit: () => void
   onRemove: () => void
   onChanged: () => Promise<void>
@@ -278,7 +292,8 @@ function CompanyCard({ company: c, month, info, onEdit, onRemove, onChanged, onE
         </div>
       </div>
 
-      <div className="nfe-month">
+      <div className="nfe-blocks">
+        <div className="nfe-month">
         <div className="muted small">Notas recebidas em {monthLabel(month)}</div>
         <div className="stat-value">{info?.count ?? 0}</div>
         <div className="small">
@@ -293,6 +308,27 @@ function CompanyCard({ company: c, month, info, onEdit, onRemove, onChanged, onE
         )}
         {c.last_status && <div className="small">{c.last_status}</div>}
         {!c.last_sync_at && certOk && <div className="muted small">A primeira consulta à SEFAZ acontece automaticamente em até 15 minutos.</div>}
+      </div>
+        <div className="nfe-month">
+          <div className="muted small">NFC-e emitidas em {monthLabel(month)}</div>
+          {c.uf !== 'SP' ? (
+            <div className="muted small">A consulta de NFC-e emitidas só está disponível para empresas de SP (serviço da SEFAZ-SP).</div>
+          ) : (
+            <>
+              <div className="stat-value">{nfce?.quantidade ?? 0}</div>
+              <div className="small">
+                {money(nfce?.valor ?? 0)}
+                {nfce && nfce.baixadas < nfce.total_chaves && (
+                  <span className="muted"> · valor de {nfce.baixadas} de {nfce.total_chaves} notas (o resto está sendo baixado)</span>
+                )}
+                {nfce?.canceladas ? <span className="muted"> · {nfce.canceladas} cancelada(s), fora da conta</span> : null}
+              </div>
+              {c.nfce_sync_at && <div className="muted small">Atualizado {dateTime(c.nfce_sync_at)}</div>}
+              {c.nfce_status && <div className="small">{c.nfce_status}</div>}
+              {!c.nfce_sync_at && certOk && <div className="muted small">A primeira consulta acontece automaticamente em até 15 minutos.</div>}
+            </>
+          )}
+        </div>
       </div>
 
       {status && <div className="hint">{status}</div>}

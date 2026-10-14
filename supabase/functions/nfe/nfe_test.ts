@@ -54,3 +54,16 @@ Deno.test('certificado A1 de teste', async () => {
   assert(pem.notAfter.getTime() > Date.now())
   await assertRejects(async () => readPfx(pfx, 'senha-errada'), UserError)
 })
+
+Deno.test('NFC-e: listagem, download e datas', () => {
+  const k1 = '35261045215546000106650010000012341000012345'
+  const k2 = '35260945215546000106650010000012351000012346'
+  const list = s.parseNfceList(`<soap:Envelope><soap:Body><retNfceListagemChaves versao="1.00" xmlns="http://www.portalfiscal.inf.br/nfe"><tpAmb>1</tpAmb><verAplic>SP</verAplic><dhReq>2026-10-14T15:00:00</dhReq><cStat>101</cStat><xMotivo>Parcial</xMotivo><chNFCe>${k1}</chNFCe><chNFCe>${k2}</chNFCe><dhEmisUltNfce>2026-10-02T11:30:15</dhEmisUltNfce></retNfceListagemChaves></soap:Body></soap:Envelope>`)
+  assertEquals([list.cStat, list.chaves.length, list.dhEmisUltNfce], [101, 2, '2026-10-02T11:30:15'])
+  assertEquals(s.competenciaFromKey(k1), '2026-10')
+  assertEquals(s.competenciaFromKey(k2), '2026-09')
+  const dl = s.parseNfceXml('<retNfceDownloadXML versao="1.00"><tpAmb>1</tpAmb><cStat>200</cStat><xMotivo>ok</xMotivo><proc><nfeProc versao="4.00"><dhInc>2026-10-02T11:30:20-03:00</dhInc><nProt>135260000000001</nProt><NFe><infNFe><ide><dhEmi>2026-10-02T11:30:15-03:00</dhEmi></ide><total><ICMSTot><vProd>10.00</vProd><vNF>12.50</vNF></ICMSTot></total></infNFe></NFe></nfeProc><procEventoNFe versao="1.00"><dhInc>x</dhInc><nProt>1</nProt><evento><infEvento><tpEvento>110111</tpEvento></infEvento></evento></procEventoNFe></proc></retNfceDownloadXML>')
+  assertEquals([dl.cStat, dl.valor, dl.competencia, dl.cancelada], [200, 12.5, '2026-10', true])
+  assertEquals(s.localMinute(new Date('2026-10-14T18:05:00Z')), '2026-10-14T15:05')
+  assertEquals(s.fromLocal('2026-10-02T11:30:15').toISOString(), '2026-10-02T14:30:00.000Z')
+})

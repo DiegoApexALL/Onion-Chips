@@ -56,6 +56,14 @@ notas dos últimos ~90 dias.
 4. No app, abra **Empresas**, cadastre o CNPJ e a UF, toque em **Certificado** e
    envie o arquivo `.pfx` com a senha. As notas aparecem sozinhas em até 15 minutos.
 
+### NFC-e emitidas (empresas de SP)
+
+Para empresas de SP, o mesmo workflow usa o serviço **SAE-NFC-e** da SEFAZ-SP
+(`NFCeListagemChaves` e `NFCeDownloadXML`) para listar as NFC-e emitidas pelo CNPJ e
+baixar o XML de cada uma. A quantidade aparece logo; o valor vai sendo completado aos
+poucos (20 notas a cada 15 minutos, começando pelo mês atual), por causa do limite de
+consultas da SEFAZ-SP. A SEFAZ-SP guarda cerca de 100 dias.
+
 ### Consulta automática (GitHub Actions)
 
 A SEFAZ pede o certificado no meio da conexão (renegociação TLS), e o ambiente do
