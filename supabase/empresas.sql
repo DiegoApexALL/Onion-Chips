@@ -54,3 +54,13 @@ create policy "logados" on companies for all to authenticated using (true) with 
 drop policy if exists "logados leem" on nfe_docs;
 create policy "logados leem" on nfe_docs for select to authenticated using (true);
 -- company_certs: nenhuma política de propósito (ninguém lê pelo app)
+
+-- Configurações privadas da função "nfe" (endereço e senha do intermediário da SEFAZ na Vercel).
+-- SEM políticas de propósito: só a função lê.
+create table if not exists app_secrets (
+  name text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+alter table app_secrets enable row level security;
+-- insert into app_secrets (name, value) values ('sefaz_proxy_url', 'https://SEU-PROJETO.vercel.app'), ('sefaz_proxy_secret', 'A MESMA SENHA DO PROXY_SECRET DA VERCEL');

@@ -7,12 +7,11 @@
 //
 // Segredos opcionais (Supabase > Edge Functions > Secrets):
 //   CERT_SECRET   — chave usada para criptografar os certificados (se faltar, usa a service role key)
-//   SEFAZ_CA_PEM  — certificados raiz extras (PEM) caso a SEFAZ use uma cadeia ICP-Brasil não reconhecida
+//   SEFAZ_PROXY_URL / SEFAZ_PROXY_SECRET — intermediário Node na Vercel (ou na tabela app_secrets)
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import {
-  buildEnvelope, buildHttpRequest, currentMonth, gunzipBase64, parseDoc, parseHttpResponse, parseRet,
-  SEFAZ_HOST, type ParsedDoc,
+  buildEnvelope, currentMonth, gunzipBase64, parseDoc, parseRet, type ParsedDoc,
 } from './sefaz.ts'
 import { type Pem, readPfx, UserError } from './cert.ts'
 
@@ -118,56 +117,40 @@ function fmtCnpj(c: string) {
 
 // ---------------- SEFAZ ----------------
 
-function splitPem(bundle: string): string[] {
-  return bundle.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? []
+// A SEFAZ pede o certificado por renegociação TLS, que o Deno (rustls) não suporta.
+// Por isso a chamada passa por um intermediário Node.js (pasta sefaz-proxy, publicado na Vercel).
+// Endereço e senha ficam em app_secrets (tabela sem acesso pelo app) ou nos segredos da função.
+async function proxyConfig(): Promise<{ url: string; secret: string }> {
+  let url = Deno.env.get('SEFAZ_PROXY_URL') ?? ''
+  let secret = Deno.env.get('SEFAZ_PROXY_SECRET') ?? ''
+  if (!url || !secret) {
+    const { data } = await admin.from('app_secrets').select('name, value').in('name', ['sefaz_proxy_url', 'sefaz_proxy_secret'])
+    for (const r of data ?? []) {
+      if (r.name === 'sefaz_proxy_url' && !url) url = r.value
+      if (r.name === 'sefaz_proxy_secret' && !secret) secret = r.value
+    }
+  }
+  if (!url || !secret) throw new UserError('O intermediário da SEFAZ (Vercel) ainda não foi configurado.')
+  return { url: url.replace(/\/+$/, ''), secret }
 }
 
 async function sefazPost(pem: Pem, xml: string): Promise<string> {
-  const extraCa = splitPem(Deno.env.get('SEFAZ_CA_PEM') ?? '')
-  let conn: Deno.TlsConn
+  const { url, secret } = await proxyConfig()
+  let res: Response
   try {
-    conn = await Deno.connectTls({
-      hostname: SEFAZ_HOST,
-      port: 443,
-      cert: pem.cert,
-      key: pem.key,
-      ...(extraCa.length ? { caCerts: extraCa } : {}),
-    } as Deno.ConnectTlsOptions)
+    res = await fetch(`${url}/api/sefaz`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-proxy-secret': secret },
+      body: JSON.stringify({ cert: pem.cert, key: pem.key, xml }),
+      signal: AbortSignal.timeout(55_000),
+    })
   } catch (e) {
-    throw tlsError(e)
+    throw new Error(`Não foi possível falar com o intermediário da SEFAZ: ${(e as Error).message}`)
   }
-  const timer = setTimeout(() => { try { conn.close() } catch { /* já fechada */ } }, 45_000)
-  try {
-    await writeAll(conn, buildHttpRequest(xml))
-    let buf = new Uint8Array(0)
-    const chunk = new Uint8Array(32 * 1024)
-    for (;;) {
-      let n: number | null
-      try {
-        n = await conn.read(chunk)
-      } catch (e) {
-        // Alguns servidores fecham sem "close_notify": usa o que já chegou
-        const partial = buf.length ? parseHttpResponse(buf, true) : null
-        if (partial) return checkHttp(partial)
-        throw tlsError(e)
-      }
-      if (n === null) return checkHttp(parseHttpResponse(buf, true)!)
-      const next = new Uint8Array(buf.length + n)
-      next.set(buf)
-      next.set(chunk.subarray(0, n), buf.length)
-      buf = next
-      const res = parseHttpResponse(buf, false)
-      if (res) return checkHttp(res)
-    }
-  } finally {
-    clearTimeout(timer)
-    try { conn.close() } catch { /* já fechada */ }
-  }
-}
-
-async function writeAll(conn: Deno.TlsConn, data: Uint8Array) {
-  let off = 0
-  while (off < data.length) off += await conn.write(data.subarray(off))
+  const out = await res.json().catch(() => ({})) as { status?: number; body?: string; error?: string }
+  if (res.status === 401) throw new Error('O intermediário da SEFAZ recusou a senha (confira PROXY_SECRET na Vercel).')
+  if (!res.ok || out.error) throw new Error(`Falha na conexão com a SEFAZ: ${out.error ?? `HTTP ${res.status}`}`)
+  return checkHttp({ status: Number(out.status), body: String(out.body ?? '') })
 }
 
 function checkHttp(res: { status: number; body: string }): string {
@@ -176,15 +159,6 @@ function checkHttp(res: { status: number; body: string }): string {
     throw new Error(`SEFAZ respondeu HTTP ${res.status}: ${res.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300)}`)
   }
   return res.body
-}
-
-function tlsError(e: unknown): Error {
-  const m = String((e as Error)?.message ?? e)
-  if (/UnknownIssuer|unknown ?ca|certificate/i.test(m) && !/client/i.test(m)) {
-    return new Error(`Não foi possível validar o certificado do servidor da SEFAZ (${m}). ` +
-      'Cadastre a cadeia ICP-Brasil no segredo SEFAZ_CA_PEM da função (veja o README).')
-  }
-  return new Error(`Falha na conexão segura com a SEFAZ: ${m}`)
 }
 
 const HOUR = 60 * 60 * 1000
