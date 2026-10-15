@@ -249,3 +249,25 @@ fieldset.choice{border:1px solid var(--border);border-radius:8px;padding:10px 12
 fieldset.choice legend{font-size:.85rem;font-weight:600;color:var(--muted);padding:0 4px}
 label.check{display:flex;flex-direction:row;align-items:flex-start;gap:8px;font-weight:400;color:var(--text);font-size:.92rem}
 label.check input{width:auto;margin-top:3px}
+
+/* Checklist */
+.cap::first-letter{text-transform:uppercase}
+.checklist-head{display:grid;gap:10px}
+.checklist-head .row-between{margin-bottom:0}
+.progress{position:relative;height:28px;border-radius:99px;background:var(--track);overflow:hidden}
+.progress-bar{position:absolute;inset:0 auto 0 0;background:color-mix(in srgb,var(--pos) 70%,transparent);transition:width .3s}
+.progress span{position:relative;display:block;text-align:center;line-height:28px;font-weight:700;font-size:.85rem}
+.task-list{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.task{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.task-done{background:color-mix(in srgb,var(--pos) 8%,var(--card));border-color:color-mix(in srgb,var(--pos) 35%,var(--border))}
+.task-main{display:flex;gap:12px;align-items:flex-start}
+.task-check{flex:0 0 28px;height:28px;border-radius:50%;border:2px solid var(--border);display:grid;place-items:center;font-weight:700;color:#fff}
+.task-done .task-check{background:var(--pos);border-color:var(--pos)}
+.task-text{display:grid;gap:4px;min-width:0}
+.task-text .chip{justify-self:start}
+.task-photo img{max-height:160px;border-radius:8px;display:block}
+.task-actions{display:flex;gap:8px;flex-wrap:wrap}
+.task-actions .primary{flex:1 1 auto;min-height:44px}
+.day-chips{display:flex;flex-wrap:wrap;gap:6px}
+.day-chip{background:var(--bg);border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:99px;font-weight:600}
+.day-chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
