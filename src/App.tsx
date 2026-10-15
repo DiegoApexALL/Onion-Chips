@@ -8,12 +8,13 @@ import Auth from './pages/Auth'
 import Checklist from './pages/Checklist'
 import Closings from './pages/Closings'
 import Companies from './pages/Companies'
+import Contagem from './pages/Contagem'
 import Dashboard from './pages/Dashboard'
 import Ingredients from './pages/Ingredients'
 import Recipes from './pages/Recipes'
 import Users from './pages/Users'
 
-type Tab = 'dashboard' | 'ingredients' | 'recipes' | 'closings' | 'checklist' | 'companies' | 'users' | 'soon'
+type Tab = 'dashboard' | 'ingredients' | 'recipes' | 'closings' | 'checklist' | 'contagem' | 'companies' | 'users' | 'soon'
 const isApp = Capacitor.isNativePlatform()
 
 // modulo null = só o master
@@ -23,6 +24,7 @@ const TABS: { id: Tab; label: string; modulo: Modulo | null }[] = [
   { id: 'recipes', label: 'Receitas', modulo: 'custos' },
   { id: 'closings', label: 'Fechamentos', modulo: 'fechamentos' },
   { id: 'checklist', label: 'Checklist', modulo: 'checklist' },
+  { id: 'contagem', label: 'Contagem', modulo: 'contagem' },
   { id: 'companies', label: 'Empresas', modulo: 'notas' },
   { id: 'users', label: 'Usuários', modulo: null },
 ]
@@ -77,8 +79,8 @@ export default function App() {
   }, [userId])
 
   // Sem Supabase (modo local) tudo é liberado
-  // Checklist depende do banco/login: some no modo local
-  const allowed = TABS.filter((t) => (!supabase ? t.id !== 'checklist' : t.modulo ? pode(perfil, t.modulo) : perfil?.papel === 'master'))
+  // Checklist e contagem dependem do banco/login: somem no modo local
+  const allowed = TABS.filter((t) => (!supabase ? t.id !== 'checklist' && t.id !== 'contagem' : t.modulo ? pode(perfil, t.modulo) : perfil?.papel === 'master'))
   const visibleTab: Tab = allowed.some((t) => t.id === tab) ? tab : allowed[0]?.id ?? 'soon'
 
   useEffect(() => {
@@ -155,6 +157,7 @@ export default function App() {
         )}
         {visibleTab === 'closings' && <Closings onError={setError} isMaster={!supabase || perfil?.papel === 'master'} />}
         {visibleTab === 'checklist' && perfil && <Checklist perfil={perfil} onError={setError} />}
+        {visibleTab === 'contagem' && perfil && <Contagem perfil={perfil} onError={setError} />}
         {visibleTab === 'companies' && <Companies onError={setError} />}
         {visibleTab === 'users' && perfil && <Users me={perfil} onError={setError} />}
         {visibleTab === 'soon' && (

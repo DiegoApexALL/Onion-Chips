@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ConfirmButton from '../ConfirmButton'
 import type { Perfil } from '../lib/perfil'
 import { supabase } from '../lib/store'
+import { DIAS, dataLonga, diaSemana, hoje, hora } from '../lib/datas'
 
 interface Unit { id: string; nome: string }
 interface Item {
@@ -26,15 +27,7 @@ interface Done {
   foto_path: string | null
 }
 
-const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const BUCKET = 'checklist'
-
-function hoje() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
-}
-const diaSemana = (iso: string) => new Date(`${iso}T12:00:00`).getDay()
-const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-const dataLonga = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })
 
 /** Reduz a foto para no máximo 1280 px e JPEG ~70% (economiza dados e espaço). */
 async function comprimir(file: File): Promise<Blob> {
