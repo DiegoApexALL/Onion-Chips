@@ -5,7 +5,7 @@ import { supabase } from '../lib/store'
 import { DIAS, dataCurta, dataLonga, diaSemana, hoje, hora } from '../lib/datas'
 
 interface Unit { id: string; nome: string }
-interface Lista { id: string; nome: string; dias_semana: number[]; todos_itens: boolean; ordem: number; ativo: boolean }
+interface Lista { id: string; nome: string; dias_semana: number[]; todos_itens: boolean; ordem: number; ativo: boolean; chave?: string | null }
 interface Item {
   id: string
   nome: string
@@ -17,6 +17,7 @@ interface Item {
   custo: number | null
   ordem: number
   ativo: boolean
+  ingredient_id?: string | null
 }
 interface Count {
   id: string
@@ -393,7 +394,7 @@ function Historico({ units, lists, items, onClose, onError }: {
 }
 
 type ItemDraft = Omit<Item, 'id'> & { id?: string }
-type ListaDraft = Omit<Lista, 'id'> & { id?: string }
+type ListaDraft = Omit<Lista, 'id' | 'chave'> & { id?: string }
 
 function Cadastro({ items, lists, units, isMaster, onClose, onChanged, onError }: {
   items: Item[]
@@ -418,7 +419,7 @@ function Cadastro({ items, lists, units, isMaster, onClose, onChanged, onError }
   const abrir = (i?: Item) => {
     setLdraft(null)
     setDraft(i ? { ...i } : {
-      nome: '', categoria: categoriasExistentes[0] ?? 'Proteínas', medida: 'kg', unit_ids: units.length === 1 ? [units[0].id] : units.map((u) => u.id),
+      nome: '', categoria: 'Embalagens', medida: 'kg', unit_ids: units.length === 1 ? [units[0].id] : units.map((u) => u.id),
       list_ids: [], estoque_minimo: null, custo: null, ordem: 0, ativo: true,
     })
     setMins({ min: i?.estoque_minimo != null ? fmtQtd(i.estoque_minimo) : '', custo: i?.custo != null ? String(i.custo).replace('.', ',') : '' })
@@ -434,7 +435,8 @@ function Cadastro({ items, lists, units, isMaster, onClose, onChanged, onError }
     setBusy(true)
     const row = {
       nome: draft.nome.trim(), categoria: draft.categoria.trim() || 'Geral', medida: draft.medida.trim() || 'un',
-      unit_ids: draft.unit_ids, list_ids: draft.list_ids, estoque_minimo: min, custo, ordem: draft.ordem, ativo: draft.ativo,
+      unit_ids: draft.unit_ids, list_ids: draft.list_ids, estoque_minimo: min, ordem: draft.ordem, ativo: draft.ativo,
+      ...(draft.ingredient_id ? {} : { custo }),
     }
     const { error } = draft.id
       ? await supabase!.from('count_items').update(row).eq('id', draft.id)
@@ -533,15 +535,19 @@ function Cadastro({ items, lists, units, isMaster, onClose, onChanged, onError }
           <h2>Itens</h2>
           {!draft && <button className="primary small" onClick={() => abrir()}>+ Novo item</button>}
         </div>
+        <p className="small muted">Os ingredientes entram aqui sozinhos (checks de contagem no cadastro de Ingredientes). Cadastre aqui o que não é ingrediente: embalagens, limpeza…</p>
         {items.length > 8 && <input type="search" placeholder="Buscar item" value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label="Buscar item" />}
       </section>
 
       {draft && (
         <section className="card form-grid">
           <h2 className="full">{draft.id ? 'Editar item' : 'Novo item'}</h2>
+          {draft.ingredient_id && (
+            <p className="full small muted">Item vindo dos <b>Ingredientes</b>: nome, custo e os checks de contagem diária/semanal são alterados lá.</p>
+          )}
           <label className="full">
             Item
-            <input value={draft.nome} placeholder="Ex.: Coxão mole" onChange={(e) => setDraft({ ...draft, nome: e.target.value })} />
+            <input value={draft.nome} disabled={!!draft.ingredient_id} placeholder="Ex.: Coxão mole" onChange={(e) => setDraft({ ...draft, nome: e.target.value })} />
           </label>
           <label>
             Categoria
@@ -561,12 +567,12 @@ function Cadastro({ items, lists, units, isMaster, onClose, onChanged, onError }
           </label>
           <label>
             Custo por {draft.medida || 'medida'} (R$, opcional)
-            <input inputMode="decimal" value={mins.custo} placeholder="Ex.: 42,90" onChange={(e) => setMins({ ...mins, custo: e.target.value })} />
+            <input inputMode="decimal" value={mins.custo} disabled={!!draft.ingredient_id} placeholder="Ex.: 42,90" onChange={(e) => setMins({ ...mins, custo: e.target.value })} />
           </label>
           {especificas.length > 0 && (
             <fieldset className="full choice">
               <legend>Entra nas listas</legend>
-              {especificas.map((l) => (
+              {especificas.filter((l) => !(draft.ingredient_id && l.chave === 'diaria')).map((l) => (
                 <label key={l.id} className="check">
                   <input type="checkbox" checked={draft.list_ids.includes(l.id)} onChange={() => setDraft({ ...draft, list_ids: toggle(draft.list_ids, l.id) })} />
                   <span>{l.nome} <span className="muted small">({diasTexto(l.dias_semana)})</span></span>
@@ -612,7 +618,9 @@ function Cadastro({ items, lists, units, isMaster, onClose, onChanged, onError }
               return (
                 <li key={i.id} className="unit-row">
                   <div>
-                    <div className="strong">{i.nome} <span className="muted small">({i.medida})</span> {!i.ativo && <span className="chip chip-high">Inativo</span>}</div>
+                    <div className="strong">
+                      {i.nome} <span className="muted small">({i.medida})</span> {i.ingredient_id && <span className="chip chip-low">Ingrediente</span>} {!i.ativo && <span className="chip chip-high">Inativo</span>}
+                    </div>
                     <div className="small muted">
                       {nomes.length ? nomes.join(', ') : 'Só nas listas gerais'}
                       {' · '}{i.unit_ids.map(unitNome).filter(Boolean).join(', ') || 'outras unidades'}
@@ -623,7 +631,7 @@ function Cadastro({ items, lists, units, isMaster, onClose, onChanged, onError }
                   {editavel && (
                     <div className="row-actions">
                       <button className="ghost small" onClick={() => abrir(i)}>Editar</button>
-                      <ConfirmButton onConfirm={() => remover('count_items', i.id)} title="Apaga o item e as contagens dele" />
+                      {!i.ingredient_id && <ConfirmButton onConfirm={() => remover('count_items', i.id)} title="Apaga o item e as contagens dele" />}
                     </div>
                   )}
                 </li>

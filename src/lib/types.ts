@@ -6,6 +6,9 @@ export interface Ingredient {
   unit: Unit
   package_price: number
   package_qty: number
+  /** Contagem da loja (só no banco): entra na lista diária / na semanal geral */
+  contar_diaria?: boolean
+  contar_semanal?: boolean
 }
 
 export interface RecipeItem {

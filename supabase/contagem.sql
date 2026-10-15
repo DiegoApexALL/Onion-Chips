@@ -108,3 +108,48 @@ create policy "corrigir contagem" on counts for update to authenticated
 drop policy if exists "apagar contagem" on counts;
 create policy "apagar contagem" on counts for delete to authenticated
   using (app_gerencia(unit_id, 'contagem'));
+
+-- Ingredientes viram itens da contagem (dois checks no cadastro do ingrediente)
+alter table ingredients add column if not exists contar_diaria boolean not null default false;
+alter table ingredients add column if not exists contar_semanal boolean not null default true;
+alter table count_items add column if not exists ingredient_id uuid unique references ingredients(id) on delete cascade;
+alter table count_lists add column if not exists chave text unique;   -- 'diaria' = lista do check "contagem diária"
+update count_lists set chave = 'diaria' where nome = 'Diária – Proteínas' and chave is null;
+
+create or replace function public.sync_ingrediente_contagem() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  med text := case new.unit when 'g' then 'kg' when 'kg' then 'kg' when 'ml' then 'L' when 'l' then 'L' else 'un' end;
+  fator numeric := case new.unit when 'g' then 1000 when 'ml' then 1000 else 1 end;
+  custo_med numeric := round(new.package_price / nullif(new.package_qty, 0) * fator, 4);
+  diaria uuid := (select id from count_lists where chave = 'diaria');
+  mudou boolean := tg_op = 'INSERT' or old.contar_diaria is distinct from new.contar_diaria or old.contar_semanal is distinct from new.contar_semanal;
+begin
+  if not exists (select 1 from count_items where ingredient_id = new.id) then
+    if new.contar_semanal or new.contar_diaria then
+      insert into count_items (ingredient_id, nome, categoria, medida, custo, unit_ids, list_ids, ativo)
+      values (new.id, new.name, 'Ingredientes', med, custo_med, coalesce((select array_agg(id) from units), '{}'),
+              case when new.contar_diaria and diaria is not null then array[diaria] else '{}' end, true);
+    end if;
+    return new;
+  end if;
+  update count_items c set
+    nome = new.name,
+    custo = case when c.medida = med then custo_med else c.custo end,
+    ativo = case when mudou then (new.contar_semanal or new.contar_diaria) else c.ativo end,
+    list_ids = case
+      when not mudou or diaria is null then c.list_ids
+      when new.contar_diaria then array(select distinct x from unnest(c.list_ids || diaria) x)
+      else array_remove(c.list_ids, diaria) end
+  where c.ingredient_id = new.id;
+  return new;
+end $$;
+revoke execute on function public.sync_ingrediente_contagem() from public, anon, authenticated;
+
+drop trigger if exists ingrediente_contagem on ingredients;
+create trigger ingrediente_contagem after insert or update on ingredients
+  for each row execute function sync_ingrediente_contagem();
+
+-- Cria os itens dos ingredientes que já existem (precisa ter unidades cadastradas)
+update ingredients set contar_semanal = contar_semanal where exists (select 1 from units)
+  and not exists (select 1 from count_items c where c.ingredient_id = ingredients.id);

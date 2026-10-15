@@ -98,7 +98,9 @@ Tabelas e regras em [`supabase/checklist.sql`](supabase/checklist.sql).
 
 Aba **Contagem**: em **Cadastro**, o master e os gerentes criam as **listas de contagem**
 (ex.: *Diária – Proteínas*, todos os dias; *Semanal – Geral*, com "todos os itens") e os
-**itens** (categoria, medida, estoque mínimo, custo opcional, listas e unidades). A equipe abre
+**itens** (categoria, medida, estoque mínimo, custo opcional, listas e unidades). Os
+**ingredientes** entram sozinhos: no cadastro de Ingredientes há os checks *Usar na contagem
+diária* e *Usar na contagem semanal* (marcado por padrão); nome e custo seguem o ingrediente. A equipe abre
 a lista do dia, digita as quantidades e salva; aparece a contagem anterior e o que ficou abaixo
 do mínimo (com botão para copiar a lista de compras). A equipe só lança no próprio dia; o
 gerente corrige dias anteriores e vê o **Histórico** (últimas contagens lado a lado).
