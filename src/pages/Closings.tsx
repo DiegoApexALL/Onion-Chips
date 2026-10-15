@@ -62,7 +62,7 @@ function QuebraChip({ v }: { v: number }) {
   return <span className={`chip ${v > 0 ? 'chip-low' : 'chip-high'}`}>{v > 0 ? 'Sobra' : 'Falta'} {money(Math.abs(v))}</span>
 }
 
-export default function Closings({ onError }: { onError: (msg: string) => void }) {
+export default function Closings({ onError, isMaster = true }: { onError: (msg: string) => void; isMaster?: boolean }) {
   const [units, setUnits] = useState<Unidade[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [rows, setRows] = useState<Row[]>([])
@@ -177,7 +177,7 @@ export default function Closings({ onError }: { onError: (msg: string) => void }
         </ul>
       </section>
 
-      <UnitsCard units={units} companies={companies} onChanged={load} onError={onError} />
+      {isMaster && <UnitsCard units={units} companies={companies} onChanged={load} onError={onError} />}
     </>
   )
 }

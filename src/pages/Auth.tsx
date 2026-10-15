@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
+import { loginToEmail } from '../lib/perfil'
 import { supabase } from '../lib/store'
 
 export default function Auth() {
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
-  const [email, setEmail] = useState('')
+  const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -12,35 +12,27 @@ export default function Auth() {
     e.preventDefault()
     setBusy(true)
     setMsg(null)
-    const { data, error } =
-      mode === 'login'
-        ? await supabase!.auth.signInWithPassword({ email, password })
-        : await supabase!.auth.signUp({ email, password })
+    const { error } = await supabase!.auth.signInWithPassword({ email: loginToEmail(login), password })
     setBusy(false)
-    if (error) setMsg(error.message)
-    else if (mode === 'signup' && !data.session) setMsg('Conta criada! Confirme pelo e-mail e depois entre.')
+    if (error) setMsg(/invalid/i.test(error.message) ? 'Usuário ou senha/PIN incorretos.' : error.message)
   }
 
   return (
     <div className="center">
       <form className="card auth" onSubmit={submit}>
         <h1>🧅 Onion Cost</h1>
-        <p className="muted">Entre para ver e editar os ingredientes e receitas da equipe.</p>
+        <p className="muted">Entre com o usuário e o PIN que o responsável criou para você.</p>
         <label>
-          E-mail
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          Usuário ou e-mail
+          <input required autoCapitalize="none" autoCorrect="off" autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} />
         </label>
         <label>
-          Senha
-          <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+          PIN ou senha
+          <input type="password" required minLength={6} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
         {msg && <div className="alert">{msg}</div>}
-        <button className="primary" disabled={busy}>
-          {mode === 'login' ? 'Entrar' : 'Criar conta'}
-        </button>
-        <button type="button" className="link" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
-          {mode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entrar'}
-        </button>
+        <button className="primary" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
+        <p className="small muted">Não tem acesso? Peça ao responsável pelo Onion Cost.</p>
       </form>
     </div>
   )

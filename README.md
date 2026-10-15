@@ -77,6 +77,15 @@ para este repositório. Nada sensível aparece no log.
 Observação: o GitHub pausa agendamentos de repositórios públicos sem atividade por 60
 dias. Se isso acontecer, reative em **Actions → Notas fiscais (SEFAZ) → Enable workflow**.
 
+## Usuários e permissões
+
+Ninguém se cadastra sozinho: o usuário **master** cria os acessos na aba **Usuários**
+(login + PIN de 6 números, sem e-mail). Cada usuário tem um perfil (master, gerente,
+equipe), os módulos que pode usar (custos, fechamentos, notas, contagem, checklist) e as
+unidades que enxerga. As regras valem no próprio banco (RLS): uma conta sem perfil ativo
+não lê nada. Tabelas e regras em [`supabase/usuarios.sql`](supabase/usuarios.sql); criação
+de usuários pela função `admin-users`.
+
 ## Fechamentos de caixa
 
 Aba **Fechamentos**: um fechamento por unidade e por dia, base para o DRE.
