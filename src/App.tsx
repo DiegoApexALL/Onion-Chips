@@ -5,6 +5,7 @@ import { initStore, loadExamples, store, supabase, type StoreMode } from './lib/
 import { DEFAULT_SETTINGS, type Ingredient, type Recipe, type Settings } from './lib/types'
 import { loadPerfil, pode, type Modulo, type Perfil } from './lib/perfil'
 import Auth from './pages/Auth'
+import Checklist from './pages/Checklist'
 import Closings from './pages/Closings'
 import Companies from './pages/Companies'
 import Dashboard from './pages/Dashboard'
@@ -12,7 +13,7 @@ import Ingredients from './pages/Ingredients'
 import Recipes from './pages/Recipes'
 import Users from './pages/Users'
 
-type Tab = 'dashboard' | 'ingredients' | 'recipes' | 'closings' | 'companies' | 'users' | 'soon'
+type Tab = 'dashboard' | 'ingredients' | 'recipes' | 'closings' | 'checklist' | 'companies' | 'users' | 'soon'
 const isApp = Capacitor.isNativePlatform()
 
 // modulo null = só o master
@@ -21,6 +22,7 @@ const TABS: { id: Tab; label: string; modulo: Modulo | null }[] = [
   { id: 'ingredients', label: 'Ingredientes', modulo: 'custos' },
   { id: 'recipes', label: 'Receitas', modulo: 'custos' },
   { id: 'closings', label: 'Fechamentos', modulo: 'fechamentos' },
+  { id: 'checklist', label: 'Checklist', modulo: 'checklist' },
   { id: 'companies', label: 'Empresas', modulo: 'notas' },
   { id: 'users', label: 'Usuários', modulo: null },
 ]
@@ -75,7 +77,8 @@ export default function App() {
   }, [userId])
 
   // Sem Supabase (modo local) tudo é liberado
-  const allowed = TABS.filter((t) => !supabase || (t.modulo ? pode(perfil, t.modulo) : perfil?.papel === 'master'))
+  // Checklist depende do banco/login: some no modo local
+  const allowed = TABS.filter((t) => (!supabase ? t.id !== 'checklist' : t.modulo ? pode(perfil, t.modulo) : perfil?.papel === 'master'))
   const visibleTab: Tab = allowed.some((t) => t.id === tab) ? tab : allowed[0]?.id ?? 'soon'
 
   useEffect(() => {
@@ -151,12 +154,13 @@ export default function App() {
           <Recipes ingredients={ingredients} recipes={recipes} settings={settings} reload={reload} onError={setError} />
         )}
         {visibleTab === 'closings' && <Closings onError={setError} isMaster={!supabase || perfil?.papel === 'master'} />}
+        {visibleTab === 'checklist' && perfil && <Checklist perfil={perfil} onError={setError} />}
         {visibleTab === 'companies' && <Companies onError={setError} />}
         {visibleTab === 'users' && perfil && <Users me={perfil} onError={setError} />}
         {visibleTab === 'soon' && (
           <section className="card empty">
             <h2>Olá{perfil?.nome ? `, ${perfil.nome}` : ''}!</h2>
-            <p className="muted">O checklist da cozinha e a contagem da loja vão aparecer aqui em breve.</p>
+            <p className="muted">Seu usuário ainda não tem nenhuma área liberada. Peça ao responsável.</p>
           </section>
         )}
       </main>

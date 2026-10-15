@@ -86,6 +86,14 @@ unidades que enxerga. As regras valem no próprio banco (RLS): uma conta sem per
 não lê nada. Tabelas e regras em [`supabase/usuarios.sql`](supabase/usuarios.sql); criação
 de usuários pela função `admin-users`.
 
+## Checklist
+
+Aba **Checklist**: o master e os gerentes cadastram as tarefas (grupo, dias da semana,
+unidades e se exige foto) em **Cadastro de tarefas**. A equipe escolhe a data e vê só as
+tarefas daquele dia na sua loja; ao marcar uma tarefa com foto obrigatória, a câmera abre e
+a foto (reduzida) vai para um armazenamento privado. Fica registrado quem fez e a que horas.
+Tabelas e regras em [`supabase/checklist.sql`](supabase/checklist.sql).
+
 ## Fechamentos de caixa
 
 Aba **Fechamentos**: um fechamento por unidade e por dia, base para o DRE.

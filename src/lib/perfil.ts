@@ -19,7 +19,7 @@ export const MODULOS: { id: Modulo; nome: string; desc: string }[] = [
   { id: 'fechamentos', nome: 'Fechamentos', desc: 'Fechamento de caixa das suas unidades' },
   { id: 'notas', nome: 'Notas fiscais', desc: 'Empresas, certificados, NF-e e NFC-e' },
   { id: 'contagem', nome: 'Contagem', desc: 'Contagem de itens da loja (em breve)' },
-  { id: 'checklist', nome: 'Checklist', desc: 'Tarefas da cozinha (em breve)' },
+  { id: 'checklist', nome: 'Checklist', desc: 'Tarefas do dia (gerente também cadastra as tarefas)' },
 ]
 
 export const PAPEIS: { id: Papel; nome: string; desc: string; modulos: Modulo[] }[] = [
