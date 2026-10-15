@@ -48,6 +48,10 @@ Deno.serve(async (req) => {
     const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
     const auth = token ? await admin.auth.getUser(token) : null
     if (!auth || auth.error || !auth.data.user) return json({ error: 'Entre no app para usar esta função.' }, 401)
+    const { data: perfil } = await admin.from('profiles').select('papel, modulos, ativo').eq('user_id', auth.data.user.id).maybeSingle()
+    if (!perfil?.ativo || (perfil.papel !== 'master' && !(perfil.modulos ?? []).includes('notas'))) {
+      return json({ error: 'Seu usuário não tem acesso a notas fiscais.' }, 403)
+    }
 
     const body = await req.json().catch(() => ({}))
     const companyId = String(body.company_id ?? '')
