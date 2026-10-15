@@ -97,7 +97,7 @@ export default function Checklist({ perfil, onError }: { perfil: Perfil; onError
     const paths = ds.map((d) => d.foto_path).filter((p): p is string => !!p)
     if (paths.length) {
       const { data: signed } = await supabase!.storage.from(BUCKET).createSignedUrls(paths, 3600)
-      setFotos(Object.fromEntries((signed ?? []).filter((s) => s.signedUrl).map((s) => [s.path ?? '', s.signedUrl])))
+      setFotos(Object.fromEntries((signed ?? []).filter((s) => s.signedUrl).map((s) => [s.path ?? '', s.signedUrl as string])))
     } else setFotos({})
   }, [unitId, data, onError])
 
