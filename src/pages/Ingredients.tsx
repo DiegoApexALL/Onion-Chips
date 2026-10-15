@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { costPerBase, money, money4, UNITS } from '../lib/cost'
 import ConfirmButton from '../ConfirmButton'
-import { store } from '../lib/store'
+import { store, supabase } from '../lib/store'
 import type { Ingredient, Recipe, Unit } from '../lib/types'
 
 interface Props {
@@ -12,7 +12,7 @@ interface Props {
 }
 
 const BASE_LABEL: Record<Unit, string> = { g: 'g', kg: 'g', ml: 'ml', l: 'ml', un: 'un' }
-const empty = { name: '', unit: 'kg' as Unit, package_price: '', package_qty: '1' }
+const empty = { name: '', unit: 'kg' as Unit, package_price: '', package_qty: '1', contar_diaria: false, contar_semanal: true }
 
 export default function Ingredients({ ingredients, recipes, reload, onError }: Props) {
   const [form, setForm] = useState(empty)
@@ -29,6 +29,7 @@ export default function Ingredients({ ingredients, recipes, reload, onError }: P
         unit: form.unit,
         package_price: Number(form.package_price),
         package_qty: Number(form.package_qty),
+        ...(supabase ? { contar_diaria: form.contar_diaria, contar_semanal: form.contar_semanal || form.contar_diaria } : {}),
       })
       setForm(empty)
       setEditingId(null)
@@ -42,7 +43,10 @@ export default function Ingredients({ ingredients, recipes, reload, onError }: P
 
   function edit(i: Ingredient) {
     setEditingId(i.id)
-    setForm({ name: i.name, unit: i.unit, package_price: String(i.package_price), package_qty: String(i.package_qty) })
+    setForm({
+      name: i.name, unit: i.unit, package_price: String(i.package_price), package_qty: String(i.package_qty),
+      contar_diaria: i.contar_diaria ?? false, contar_semanal: i.contar_semanal ?? true,
+    })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -83,6 +87,21 @@ export default function Ingredients({ ingredients, recipes, reload, onError }: P
             </select>
           </div>
         </label>
+        {supabase && (
+          <fieldset className="full choice">
+            <legend>Contagem da loja</legend>
+            <label className="check">
+              <input type="checkbox" checked={form.contar_diaria}
+                onChange={(e) => setForm({ ...form, contar_diaria: e.target.checked, contar_semanal: e.target.checked || form.contar_semanal })} />
+              <span>Usar na <b>contagem diária</b> <span className="muted small">(proteínas)</span></span>
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={form.contar_semanal || form.contar_diaria} disabled={form.contar_diaria}
+                onChange={(e) => setForm({ ...form, contar_semanal: e.target.checked })} />
+              <span>Usar na <b>contagem semanal</b> <span className="muted small">(geral)</span></span>
+            </label>
+          </fieldset>
+        )}
         <div className="full actions">
           {editingId && (
             <button type="button" className="ghost" onClick={() => { setEditingId(null); setForm(empty) }}>
@@ -111,7 +130,11 @@ export default function Ingredients({ ingredients, recipes, reload, onError }: P
               <tbody>
                 {ingredients.map((i) => (
                   <tr key={i.id}>
-                    <td>{i.name}</td>
+                    <td>
+                      {i.name}
+                      {supabase && i.contar_diaria && <span className="chip chip-low" title="Contagem diária"> Diária</span>}
+                      {supabase && i.contar_semanal === false && !i.contar_diaria && <span className="muted small"> · fora da contagem</span>}
+                    </td>
                     <td className="num">{money(i.package_price)} / {i.package_qty.toLocaleString('pt-BR')} {i.unit}</td>
                     <td className="num">{money4(costPerBase(i))} / {BASE_LABEL[i.unit]}</td>
                     <td className="row-actions">

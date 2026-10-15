@@ -271,3 +271,14 @@ label.check input{width:auto;margin-top:3px}
 .day-chips{display:flex;flex-wrap:wrap;gap:6px}
 .day-chip{background:var(--bg);border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:99px;font-weight:600}
 .day-chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+/* Contagem */
+.count-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.count-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.count-done{border-color:color-mix(in srgb,var(--pos) 35%,var(--border))}
+.count-info{display:grid;gap:3px;min-width:0}
+.count-info .chip{justify-self:start}
+.count-input{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.count-input input{width:96px;text-align:right;font-size:1.1rem;font-variant-numeric:tabular-nums;min-height:44px}
+input.invalid{border-color:var(--neg);outline-color:var(--neg)}
+.checklist-head .day-chips{margin-top:4px}
+.count-table td:first-child,.count-table th:first-child{position:sticky;left:0;background:var(--card);min-width:140px}
