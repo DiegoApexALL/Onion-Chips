@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { compatibleUnits, itemCost, money, pct, recipeCost } from '../lib/cost'
+import { channelPrices, compatibleUnits, itemCost, money, pct, recipeCost } from '../lib/cost'
 import { CmvValue, TargetPrice } from '../CmvBadge'
 import ConfirmButton from '../ConfirmButton'
+import { ChannelPriceTable } from './Delivery'
 import { store } from '../lib/store'
 import type { Ingredient, Recipe, RecipeItem, Settings } from '../lib/types'
 
@@ -15,7 +16,7 @@ interface Props {
 
 type Draft = Omit<Recipe, 'id'> & { id?: string }
 const newDraft = (): Draft => ({
-  name: '', yield_qty: 10, yield_label: 'pacotes', extra_costs: 0, margin_pct: 100, sale_price: null, notes: '', items: [],
+  name: '', yield_qty: 10, yield_label: 'pacotes', extra_costs: 0, margin_pct: 100, sale_price: null, notes: '', items: [], packaging_cost: 0, channel_prices: {},
 })
 
 export default function Recipes({ ingredients, recipes, settings, reload, onError }: Props) {
@@ -80,6 +81,14 @@ export default function Recipes({ ingredients, recipes, settings, reload, onErro
                     </dd>
                   </>
                 )}
+                {channelPrices(c.unitCost, r, settings).map((p) => (
+                  <span key={p.channel.id} className="contents">
+                    <dt>{p.channel.name}{p.currentPrice != null && ` (pratica ${money(p.currentPrice)})`}</dt>
+                    <dd className={p.profit != null && p.profit < 0 ? 'neg' : undefined}>
+                      {p.suggestedPrice == null ? '—' : money(p.suggestedPrice)}
+                    </dd>
+                  </span>
+                ))}
               </dl>
               <div className="actions">
                 <button className="ghost small" onClick={() => setDraft(structuredClone(r))}>Editar</button>
@@ -148,6 +157,12 @@ function Editor({ draft: initial, ingredients, settings, onCancel, onSave }: {
           <input type="number" min="0" step="any" value={d.margin_pct} onChange={(e) => set('margin_pct', Number(e.target.value))} />
         </label>
         <label>
+          Embalagem de delivery por unidade (R$)
+          <input type="number" min="0" step="0.01" value={d.packaging_cost ?? 0}
+            title="Caixa, sacola, talheres… Só entra nos canais marcados com 'usa embalagem'. Se a embalagem já está nos ingredientes, deixe 0."
+            onChange={(e) => set('packaging_cost', Number(e.target.value))} />
+        </label>
+        <label>
           Preço de venda atual (R$, opcional)
           <input type="number" min="0" step="0.01" value={d.sale_price ?? ''}
             onChange={(e) => set('sale_price', e.target.value === '' ? null : Number(e.target.value))} />
@@ -189,6 +204,18 @@ function Editor({ draft: initial, ingredients, settings, onCancel, onSave }: {
           Observações
           <textarea rows={2} value={d.notes ?? ''} onChange={(e) => set('notes', e.target.value)} />
         </label>
+      </div>
+
+      <div className="card">
+        <h2>Preço por canal de delivery</h2>
+        <p className="muted small">Calculado a partir do custo por {d.yield_label.replace(/s$/, '') || 'unidade'} ({money(c.unitCost)}) e das taxas de cada app. Digite o preço que você pratica hoje para ver o lucro real.</p>
+        <ChannelPriceTable unitCost={c.unitCost} recipe={d} settings={settings}
+          onPriceChange={(id, price) => {
+            const next = { ...(d.channel_prices ?? {}) }
+            if (price == null || !(price > 0)) delete next[id]
+            else next[id] = price
+            set('channel_prices', next)
+          }} />
       </div>
 
       <div className="card summary">
