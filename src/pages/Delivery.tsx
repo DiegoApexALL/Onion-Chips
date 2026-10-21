@@ -14,7 +14,6 @@ export function ChannelConfig({ settings, onSave }: { settings: Settings; onSave
   const fresh = () => ({
     channels: settings.channels.length ? structuredClone(settings.channels) : starter(),
     tax: String(settings.tax_pct),
-    margin: String(settings.channel_margin_pct),
   })
   const [form, setForm] = useState(fresh)
   const [busy, setBusy] = useState(false)
@@ -25,16 +24,15 @@ export function ChannelConfig({ settings, onSave }: { settings: Settings; onSave
     setForm({ ...form, channels: form.channels.map((c, j) => (j === i ? { ...c, ...patch } : c)) })
 
   const tax = Number(form.tax)
-  const margin = Number(form.margin)
-  const over = form.channels.find((c) => c.commission_pct + c.payment_pct + c.discount_pct + tax + margin >= 100)
-  const invalid = form.tax === '' || form.margin === '' || tax < 0 || margin < 0 || form.channels.some((c) => !c.name.trim()) || !!over
+  const over = form.channels.find((c) => c.commission_pct + c.payment_pct + c.discount_pct + tax >= 100)
+  const invalid = form.tax === '' || tax < 0 || form.channels.some((c) => !c.name.trim()) || !!over
   const unsaved = !settings.channels.length
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (invalid) return
     setBusy(true)
-    await onSave({ ...settings, channels: form.channels.map((c) => ({ ...c, name: c.name.trim() })), tax_pct: tax, channel_margin_pct: margin })
+    await onSave({ ...settings, channels: form.channels.map((c) => ({ ...c, name: c.name.trim() })), tax_pct: tax })
     setBusy(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
@@ -87,16 +85,12 @@ export function ChannelConfig({ settings, onSave }: { settings: Settings; onSave
           Imposto sobre a venda (%)
           <input type="number" min="0" max="99" step="any" value={form.tax} onChange={(e) => setForm({ ...form, tax: e.target.value })} />
         </label>
-        <label>
-          Lucro desejado sobre o preço (%)
-          <input type="number" min="0" max="99" step="any" value={form.margin} onChange={(e) => setForm({ ...form, margin: e.target.value })} />
-        </label>
         <button className="primary" disabled={busy || invalid}>{saved ? 'Salvo' : 'Salvar taxas'}</button>
       </div>
-      {over && <p className="neg small">Em {over.name || 'um canal'}, taxas + imposto + lucro somam 100% ou mais. Não existe preço que cubra isso.</p>}
+      {over && <p className="neg small">Em {over.name || 'um canal'}, taxas + imposto somam 100% ou mais.</p>}
       <p className="muted small">
-        Preço mínimo = (custo + embalagem + taxa fixa) ÷ (1 − (comissão + pagamento + cupom + imposto + lucro)).
-        Usa divisor porque a comissão do app é cobrada sobre o preço de venda, e não sobre o custo.
+        Custo do canal = taxas % sobre o preço sugerido da receita + embalagem + taxa fixa.
+        Sugerido no canal = (custo da receita + custo do canal) × a margem de cada receita.
       </p>
     </form>
   )
@@ -105,7 +99,7 @@ export function ChannelConfig({ settings, onSave }: { settings: Settings; onSave
 /** Tabela de preços por canal de uma receita. Com onPriceChange, permite digitar o preço praticado. */
 export function ChannelPriceTable({ unitCost, recipe, settings, onPriceChange }: {
   unitCost: number
-  recipe: Pick<Recipe, 'packaging_cost' | 'channel_prices'>
+  recipe: Pick<Recipe, 'margin_pct' | 'packaging_cost' | 'channel_prices'>
   settings: Settings
   onPriceChange?: (channelId: string, price: number | null) => void
 }) {
@@ -117,9 +111,10 @@ export function ChannelPriceTable({ unitCost, recipe, settings, onPriceChange }:
         <thead>
           <tr>
             <th>Canal</th>
-            <th className="num">Custo no canal</th>
-            <th className="num">Preço mínimo</th>
-            <th className="num">Sugerido</th>
+            <th className="num">Custo da receita</th>
+            <th className="num">Custo do canal</th>
+            <th className="num">Custo total</th>
+            <th className="num">Sugerido (+{pct(recipe.margin_pct || 0)})</th>
             {onPriceChange && <th className="num">Preço praticado</th>}
             <th className="num">Lucro/venda</th>
           </tr>
@@ -128,14 +123,22 @@ export function ChannelPriceTable({ unitCost, recipe, settings, onPriceChange }:
           {rows.map((r) => (
             <tr key={r.channel.id}>
               <td>{r.channel.name}<div className="muted small">taxas {pct(r.feesPct)}</div></td>
-              <td className="num">{money(r.cost)}</td>
-              <td className="num">{r.minPrice == null ? '—' : money(r.minPrice)}</td>
-              <td className="num strong accent">{r.suggestedPrice == null ? '—' : money(r.suggestedPrice)}</td>
+              <td className="num">{money(unitCost)}</td>
+              <td className="num">
+                {money(r.channelCost)}
+                <div className="muted small">{pct(r.feesPct)} de {money(r.basePrice)}</div>
+              </td>
+              <td className="num">{money(r.totalCost)}</td>
+              <td className="num">
+                <span className="strong accent">{money(r.suggestedPrice)}</span>
+                <div className="muted small">arredondado {money(r.roundedPrice)}</div>
+              </td>
               {onPriceChange && (
                 <td className="num">
                   <input className="price-input" type="number" min="0" step="0.01" placeholder="—" aria-label={`Preço praticado no ${r.channel.name}`}
                     value={recipe.channel_prices?.[r.channel.id] ?? ''}
                     onChange={(e) => onPriceChange(r.channel.id, e.target.value === '' ? null : Number(e.target.value))} />
+                  {r.minPrice != null && <div className="muted small">sem prejuízo a partir de {money(r.minPrice)}</div>}
                 </td>
               )}
               <td className={`num ${r.profit != null && r.profit < 0 ? 'neg' : 'pos'}`}>
@@ -146,7 +149,8 @@ export function ChannelPriceTable({ unitCost, recipe, settings, onPriceChange }:
         </tbody>
       </table>
       <p className="muted small">
-        Lucro/venda: o que sobra depois das taxas do app, imposto e custos, no preço praticado (ou no sugerido, quando não há preço praticado).
+        Custo do canal: taxas do app sobre o preço sugerido da receita ({money(unitCost * (1 + (recipe.margin_pct || 0) / 100))}), mais embalagem e taxa fixa.
+        Lucro/venda: o que sobra depois das taxas do app e dos custos, no preço praticado (ou no sugerido, quando não há preço praticado).
       </p>
     </div>
   )

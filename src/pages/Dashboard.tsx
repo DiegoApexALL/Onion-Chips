@@ -99,7 +99,7 @@ export default function Dashboard({ ingredients, recipes, settings, onSaveSettin
       {settings.channels.length > 0 && rows.length > 0 && (
         <section className="card">
           <h2>Preço sugerido por canal</h2>
-          <p className="muted small">Já com comissão, pagamento, cupom, embalagem, imposto ({pct(settings.tax_pct)}) e lucro de {pct(settings.channel_margin_pct)}.</p>
+          <p className="muted small">(Custo da receita + custo do canal) × a margem de cada receita. O custo do canal inclui as taxas do app, embalagem e taxa fixa.</p>
           <div className="table-wrap">
             <table>
               <thead>
@@ -114,7 +114,7 @@ export default function Dashboard({ ingredients, recipes, settings, onSaveSettin
                     <td>{r.name}</td>
                     {channelPrices(c.unitCost, r, settings).map((p) => (
                       <td key={p.channel.id} className="num">
-                        {p.suggestedPrice == null ? '—' : money(p.suggestedPrice)}
+                        {money(p.suggestedPrice)}
                         {p.currentPrice != null && (
                           <div className={`small ${p.profit != null && p.profit < 0 ? 'neg' : 'muted'}`}>
                             pratica {money(p.currentPrice)}
