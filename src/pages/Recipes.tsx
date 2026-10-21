@@ -85,7 +85,7 @@ export default function Recipes({ ingredients, recipes, settings, reload, onErro
                   <span key={p.channel.id} className="contents">
                     <dt>{p.channel.name}{p.currentPrice != null && ` (pratica ${money(p.currentPrice)})`}</dt>
                     <dd className={p.profit != null && p.profit < 0 ? 'neg' : undefined}>
-                      {p.suggestedPrice == null ? '—' : money(p.suggestedPrice)}
+                      {money(p.suggestedPrice)}
                     </dd>
                   </span>
                 ))}

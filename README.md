@@ -80,15 +80,18 @@ dias. Se isso acontecer, reative em **Actions → Notas fiscais (SEFAZ) → Enab
 ## Taxas de delivery (iFood, 99Food, Keeta)
 
 No **Painel**, o card **Taxas de delivery** guarda as taxas de cada app (comissão, pagamento
-online, cupom que a loja banca, taxa fixa por pedido e se usa embalagem), o imposto sobre a
-venda e o lucro desejado. Vale para todas as receitas: mudou uma taxa, todos os preços se
-recalculam. Dá para adicionar outros canais (balcão, WhatsApp).
+online, cupom que a loja banca, taxa fixa por pedido e se usa embalagem) e o imposto sobre a
+venda. Vale para todas as receitas: mudou uma taxa, todos os preços se recalculam. Dá para
+adicionar outros canais (balcão, WhatsApp).
 
 Em cada receita há o campo **Embalagem de delivery por unidade** e a tabela **Preço por
-canal**: preço mínimo, preço sugerido (terminado em ,90), o preço praticado hoje em cada app
-e o lucro por venda. O cálculo usa divisor, porque a comissão incide sobre o preço de venda:
+canal**. O preço parte do custo que já está na receita:
 
-    preço = (custo/un + embalagem + taxa fixa) ÷ (1 − (comissão + pagamento + cupom + imposto + lucro))
+    custo do canal = taxas % × preço sugerido da receita + embalagem + taxa fixa
+    sugerido no canal = (custo da receita + custo do canal) × (1 + margem da receita)
+
+Também mostra o sugerido arredondado (terminado em ,90), o preço sem prejuízo, o preço
+praticado hoje em cada app e o lucro por venda.
 
 Colunas em [`supabase/delivery.sql`](supabase/delivery.sql).
 
