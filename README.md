@@ -77,6 +77,21 @@ para este repositório. Nada sensível aparece no log.
 Observação: o GitHub pausa agendamentos de repositórios públicos sem atividade por 60
 dias. Se isso acontecer, reative em **Actions → Notas fiscais (SEFAZ) → Enable workflow**.
 
+## Taxas de delivery (iFood, 99Food, Keeta)
+
+No **Painel**, o card **Taxas de delivery** guarda as taxas de cada app (comissão, pagamento
+online, cupom que a loja banca, taxa fixa por pedido e se usa embalagem), o imposto sobre a
+venda e o lucro desejado. Vale para todas as receitas: mudou uma taxa, todos os preços se
+recalculam. Dá para adicionar outros canais (balcão, WhatsApp).
+
+Em cada receita há o campo **Embalagem de delivery por unidade** e a tabela **Preço por
+canal**: preço mínimo, preço sugerido (terminado em ,90), o preço praticado hoje em cada app
+e o lucro por venda. O cálculo usa divisor, porque a comissão incide sobre o preço de venda:
+
+    preço = (custo/un + embalagem + taxa fixa) ÷ (1 − (comissão + pagamento + cupom + imposto + lucro))
+
+Colunas em [`supabase/delivery.sql`](supabase/delivery.sql).
+
 ## Usuários e permissões
 
 Ninguém se cadastra sozinho: o usuário **master** cria os acessos na aba **Usuários**

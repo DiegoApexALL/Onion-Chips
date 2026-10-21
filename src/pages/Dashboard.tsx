@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { CmvValue } from '../CmvBadge'
 import BackupCard from './BackupCard'
+import { ChannelConfig } from './Delivery'
 import { CmvChart, CostBreakdown, Metrics } from './Charts'
-import { cmvStatus, money, pct, recipeCost } from '../lib/cost'
+import { channelPrices, cmvStatus, money, pct, recipeCost } from '../lib/cost'
 import type { Ingredient, Recipe, Settings } from '../lib/types'
 
 interface Props {
@@ -95,6 +96,40 @@ export default function Dashboard({ ingredients, recipes, settings, onSaveSettin
           </div>
         )}
       </section>
+      {settings.channels.length > 0 && rows.length > 0 && (
+        <section className="card">
+          <h2>Preço sugerido por canal</h2>
+          <p className="muted small">Já com comissão, pagamento, cupom, embalagem, imposto ({pct(settings.tax_pct)}) e lucro de {pct(settings.channel_margin_pct)}.</p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Receita</th>
+                  {settings.channels.map((ch) => <th key={ch.id} className="num">{ch.name}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ r, c }) => (
+                  <tr key={r.id}>
+                    <td>{r.name}</td>
+                    {channelPrices(c.unitCost, r, settings).map((p) => (
+                      <td key={p.channel.id} className="num">
+                        {p.suggestedPrice == null ? '—' : money(p.suggestedPrice)}
+                        {p.currentPrice != null && (
+                          <div className={`small ${p.profit != null && p.profit < 0 ? 'neg' : 'muted'}`}>
+                            pratica {money(p.currentPrice)}
+                          </div>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+      <ChannelConfig settings={settings} onSave={onSaveSettings} />
       <CmvTarget settings={settings} onSave={onSaveSettings} />
       <BackupCard onRestored={onRestored} />
     </>
@@ -120,7 +155,7 @@ function CmvTarget({ settings, onSave }: { settings: Settings; onSave: (s: Setti
     e.preventDefault()
     if (invalid) return
     setBusy(true)
-    await onSave({ cmv_min: nMin, cmv_max: nMax })
+    await onSave({ ...settings, cmv_min: nMin, cmv_max: nMax })
     setBusy(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)

@@ -1,4 +1,4 @@
-import type { Ingredient, Recipe, Settings, Unit } from './types'
+import type { Channel, Ingredient, Recipe, Settings, Unit } from './types'
 
 export const UNITS: { value: Unit; label: string }[] = [
   { value: 'g', label: 'g' },
@@ -76,4 +76,48 @@ export const CMV_LABEL: Record<CmvStatus, string> = { ok: 'Na meta', high: 'Acim
 export function priceRangeForCmv(unitCost: number, s: Settings): [number, number] | null {
   if (unitCost <= 0 || s.cmv_min <= 0 || s.cmv_max <= 0) return null
   return [unitCost / (s.cmv_max / 100), unitCost / (s.cmv_min / 100)]
+}
+
+export interface ChannelPrice {
+  channel: Channel
+  /** Custo do produto nesse canal: custo/un + embalagem (se usa) + taxa fixa */
+  cost: number
+  /** Soma dos percentuais tirados do preço (comissão, pagamento, cupom, imposto) */
+  feesPct: number
+  /** Preço que cobre custos e taxas e deixa o lucro desejado. null se as taxas somam 100% ou mais. */
+  minPrice: number | null
+  /** Preço mínimo arredondado para cima terminando em ,90 */
+  suggestedPrice: number | null
+  /** Preço praticado hoje nesse canal (se informado) */
+  currentPrice: number | null
+  /** Quanto sobra por venda no preço praticado (ou no sugerido, se não houver preço praticado) */
+  profit: number | null
+  profitPct: number | null
+}
+
+/** Arredonda para cima terminando em ,90 (28,99 → 29,90). */
+export function roundTo90(price: number): number {
+  return Math.max(0.9, Math.ceil(price - 0.9 - 1e-9) + 0.9)
+}
+
+/**
+ * Preço por canal. A comissão do app incide sobre o preço de venda, então o preço sai por divisor:
+ * preço = (custo + embalagem + taxa fixa) ÷ (1 − (comissão + pagamento + cupom + imposto + lucro)).
+ */
+export function channelPrice(unitCost: number, recipe: Pick<Recipe, 'packaging_cost' | 'channel_prices'>, channel: Channel, s: Settings): ChannelPrice {
+  const cost = unitCost + (channel.uses_packaging ? recipe.packaging_cost || 0 : 0) + (channel.fixed_fee || 0)
+  const feesPct = (channel.commission_pct || 0) + (channel.payment_pct || 0) + (channel.discount_pct || 0) + (s.tax_pct || 0)
+  const divisor = 1 - (feesPct + (s.channel_margin_pct || 0)) / 100
+  const minPrice = divisor > 0 ? cost / divisor : null
+  const suggestedPrice = minPrice != null ? roundTo90(minPrice) : null
+  const raw = recipe.channel_prices?.[channel.id]
+  const currentPrice = raw != null && Number.isFinite(raw) && raw > 0 ? raw : null
+  const base = currentPrice ?? suggestedPrice
+  const profit = base != null ? base * (1 - feesPct / 100) - cost : null
+  const profitPct = profit != null && base ? (profit / base) * 100 : null
+  return { channel, cost, feesPct, minPrice, suggestedPrice, currentPrice, profit, profitPct }
+}
+
+export function channelPrices(unitCost: number, recipe: Pick<Recipe, 'packaging_cost' | 'channel_prices'>, s: Settings): ChannelPrice[] {
+  return s.channels.map((ch) => channelPrice(unitCost, recipe, ch, s))
 }

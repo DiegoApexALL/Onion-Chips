@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core'
-import { store } from './store'
+import { store, toSettings } from './store'
 import type { Ingredient, Recipe, Settings, Unit } from './types'
 
 export interface Backup {
@@ -60,6 +60,10 @@ export function parseBackup(text: string): Backup {
       margin_pct: num(r.margin_pct) || 0,
       sale_price: r.sale_price == null || r.sale_price === '' ? null : num(r.sale_price),
       notes: r.notes == null ? null : str(r.notes),
+      packaging_cost: num(r.packaging_cost) || 0,
+      channel_prices: r.channel_prices && typeof r.channel_prices === 'object'
+        ? Object.fromEntries(Object.entries(r.channel_prices as Record<string, unknown>).filter(([, v]) => num(v) > 0).map(([k, v]) => [k, num(v)]))
+        : {},
       items: (r.items as Record<string, unknown>[]).map((it) => ({
         ingredient_id: str(it.ingredient_id),
         quantity: num(it.quantity) || 0,
@@ -67,11 +71,7 @@ export function parseBackup(text: string): Backup {
       })),
     }
   })
-  const s = (raw.settings ?? {}) as Record<string, unknown>
-  const settings: Settings = {
-    cmv_min: num(s.cmv_min) > 0 ? num(s.cmv_min) : 30,
-    cmv_max: num(s.cmv_max) > 0 ? num(s.cmv_max) : 40,
-  }
+  const settings: Settings = toSettings((raw.settings ?? {}) as Record<string, unknown>)
   return { app: 'onion-cost', version: 1, exported_at: str(raw.exported_at), ingredients, recipes, settings }
 }
 

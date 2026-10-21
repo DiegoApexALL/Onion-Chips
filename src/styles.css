@@ -282,3 +282,22 @@ label.check input{width:auto;margin-top:3px}
 input.invalid{border-color:var(--neg);outline-color:var(--neg)}
 .checklist-head .day-chips{margin-top:4px}
 .count-table td:first-child,.count-table th:first-child{position:sticky;left:0;background:var(--card);min-width:140px}
+
+/* Taxas de delivery */
+.contents { display: contents; }
+.channel-config { display: grid; gap: 12px; }
+.channel-config h2 { margin-bottom: 4px; }
+.channel-config p { margin: 0; }
+.channel-list { display: grid; gap: 10px; }
+.channel-row { display: grid; grid-template-columns: 1.3fr repeat(4, minmax(0, 1fr)) auto; gap: 8px; align-items: end; margin: 0; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
+.channel-row label { font-size: 0.8rem; }
+.ch-pack { grid-column: 1 / -2; }
+.ch-remove { grid-row: 1; grid-column: -2; align-self: end; }
+.channel-table td { vertical-align: top; }
+.price-input { width: 92px; text-align: right; }
+@media (max-width: 720px) {
+  .channel-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ch-name { grid-column: 1 / -1; }
+  .ch-pack { grid-column: 1; }
+  .ch-remove { grid-row: auto; grid-column: 2; justify-self: end; }
+}

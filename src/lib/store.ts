@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { supabaseKey, supabaseUrl } from './config'
-import { DEFAULT_SETTINGS, type Ingredient, type Recipe, type Settings } from './types'
+import { DEFAULT_SETTINGS, type Channel, type Ingredient, type Recipe, type Settings } from './types'
 
 export const supabase: SupabaseClient | null = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null
 
@@ -17,13 +17,41 @@ export interface Store {
   saveSettings(settings: Settings): Promise<void>
 }
 
-function toSettings(raw: Record<string, unknown> | null | undefined): Settings {
-  const min = Number(raw?.cmv_min)
-  const max = Number(raw?.cmv_max)
-  return Number.isFinite(min) && Number.isFinite(max) && raw ? { cmv_min: min, cmv_max: max } : { ...DEFAULT_SETTINGS }
+const n0 = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0)
+
+export function toChannels(raw: unknown): Channel[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((c) => c && typeof c === 'object' && typeof (c as Channel).name === 'string')
+    .map((c) => {
+      const x = c as Record<string, unknown>
+      return {
+        id: typeof x.id === 'string' && x.id ? x.id : crypto.randomUUID(),
+        name: String(x.name),
+        commission_pct: n0(x.commission_pct),
+        payment_pct: n0(x.payment_pct),
+        fixed_fee: n0(x.fixed_fee),
+        discount_pct: n0(x.discount_pct),
+        uses_packaging: x.uses_packaging !== false,
+      }
+    })
 }
 
-const NUMERIC = ['package_price', 'package_qty', 'yield_qty', 'extra_costs', 'margin_pct', 'sale_price']
+export function toSettings(raw: Record<string, unknown> | null | undefined): Settings {
+  if (!raw) return { ...DEFAULT_SETTINGS }
+  const min = Number(raw.cmv_min)
+  const max = Number(raw.cmv_max)
+  const margin = Number(raw.channel_margin_pct)
+  return {
+    cmv_min: Number.isFinite(min) && min > 0 ? min : DEFAULT_SETTINGS.cmv_min,
+    cmv_max: Number.isFinite(max) && max > 0 ? max : DEFAULT_SETTINGS.cmv_max,
+    channels: toChannels(raw.channels),
+    tax_pct: n0(raw.tax_pct),
+    channel_margin_pct: raw.channel_margin_pct == null || !Number.isFinite(margin) ? DEFAULT_SETTINGS.channel_margin_pct : margin,
+  }
+}
+
+const NUMERIC = ['package_price', 'package_qty', 'yield_qty', 'extra_costs', 'margin_pct', 'sale_price', 'packaging_cost']
 function normalize<T>(row: Record<string, unknown>): T {
   const out: Record<string, unknown> = { ...row }
   for (const k of NUMERIC) if (out[k] != null) out[k] = Number(out[k])
@@ -55,7 +83,7 @@ const supabaseStore = (sb: SupabaseClient): Store => ({
     if (error) throw error
   },
   async getSettings() {
-    const { data, error } = await sb.from('settings').select('cmv_min, cmv_max').eq('id', 1).maybeSingle()
+    const { data, error } = await sb.from('settings').select('*').eq('id', 1).maybeSingle()
     if (error) throw error
     return toSettings(data)
   },
