@@ -13,7 +13,7 @@ workflows) fica aqui. Nada deve ser alterado direto no Supabase ou em artifacts 
 | App Android | workflow `.github/workflows/android.yml`, versões marcadas com tags `android-vNN` |
 | Banco em uso | Supabase **onion-cost** — ref `nzyicmdfzjhmlijoocdv` (sa-east-1), URL em `src/lib/config.ts` |
 | Funções do Supabase | `supabase/functions/nfe`, `supabase/functions/admin-users`, `supabase/functions/fechamento-whatsapp` |
-| Deploy das funções | `.github/workflows/supabase.yml` (precisa do segredo `SUPABASE_ACCESS_TOKEN`) |
+| Deploy das funções | `.github/workflows/supabase.yml` — **o segredo `SUPABASE_ACCESS_TOKEN` não está configurado**, então hoje o workflow não publica nada. Até configurar, publique pelo Supabase com o código exato do repositório (e registre no histórico abaixo). |
 | SQL do banco | `supabase/*.sql` (`schema.sql` primeiro, depois um arquivo por módulo) |
 | Sincronização SEFAZ (NF-e / NFC-e) | `.github/workflows/sefaz-sync.yml` + função `nfe` |
 
@@ -46,4 +46,6 @@ Checklist com foto, Contagem diária/semanal, Usuários e permissões (master, g
   a 04/11: só consulta as NF-e emitidas contra o CNPJ e o valor/situação das NFC-e emitidas.
   A versão com XML (v7, no ar de 04/11 a 06/11) fazia cada rodada da SEFAZ passar de 5 min e o
   token OIDC do GitHub vencia no meio, então a sincronização falhou de 04/11 15h46 até a volta.
+  Publicada em 06/11 10h45 como `nfe` v8 (direto no Supabase, mesmo código do repositório); a
+  sincronização das 10h45 rodou em 35 s e as duas lojas atualizaram.
   As colunas `nfce_docs.xml`/`xml_eventos` e a função `nfce_xml_meses` continuam no banco sem uso.
