@@ -4,6 +4,8 @@
 //   { action: "save-cert",   company_id, pfx (base64), password }  → guarda o certificado A1 criptografado
 //   { action: "remove-cert", company_id }                           → apaga o certificado
 //   { action: "consult",     company_id }                           → resumo do mês e situação da sincronização
+//   { action: "xml-meses",   company_id }                           → lista mensal das NFC-e emitidas (qtd, valor, XML guardado)
+//   { action: "xml-mes",     company_id, competencia: "AAAA-MM" }   → ZIP (base64) com os XMLs das NFC-e emitidas no mês
 //
 // A consulta à SEFAZ em si roda no GitHub Actions (.github/workflows/sefaz-sync.yml), porque a SEFAZ
 // pede o certificado por renegociação TLS, que o Deno (rustls) não suporta e o Node (OpenSSL) sim.
@@ -11,18 +13,19 @@
 //   { action: "sync-jobs" }                                          → empresas a sincronizar (com certificado)
 //   { action: "sync-ingest", company_id, response? | error? }        → grava uma resposta da SEFAZ (NF-e recebidas)
 //   { action: "nfce-list-ingest", company_id, cursor, response? | error? } → chaves de NFC-e emitidas (SEFAZ-SP)
-//   { action: "nfce-xml-ingest", company_id, chave, response? | error? }   → XML de uma NFC-e (valor, cancelamento)
+//   { action: "nfce-xml-ingest", company_id, chave, response? | error? }   → XML de uma NFC-e (guarda o XML, valor, cancelamento)
 //
 // Segredo opcional (Supabase > Edge Functions > Secrets):
 //   CERT_SECRET   — chave usada para criptografar os certificados (se faltar, usa a service role key)
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import {
-  competenciaFromKey, currentMonth, fromLocal, gunzipBase64, localMinute, parseDoc, parseNfceList, parseNfceXml, parseRet,
+  competenciaFromKey, currentMonth, fromLocal, gunzipBase64, localMinute, parseDoc, parseNfceList, parseNfceXml, parseRet, tag,
   type ParsedDoc,
 } from './sefaz.ts'
 import { readPfx, UserError } from './cert.ts'
 import { createRemoteJWKSet, jwtVerify } from 'npm:jose@5.9.6'
+import { strToU8, zipSync } from 'npm:fflate@0.8.2'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -69,6 +72,10 @@ Deno.serve(async (req) => {
         return json({ ok: true })
       case 'consult':
         return json(await consult(admin, company))
+      case 'xml-meses':
+        return json(await xmlMeses(company.id))
+      case 'xml-mes':
+        return json(await xmlMes(company, String(body.competencia ?? '')))
       default:
         throw new UserError('Ação desconhecida.')
     }
@@ -94,13 +101,17 @@ async function aesKey(): Promise<CryptoKey> {
 const b64 = (u: Uint8Array) => btoa(String.fromCharCode(...u))
 const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
 
+/** base64 em pedaços para não estourar a pilha com arquivos grandes */
+function bigB64(u: Uint8Array): string {
+  let out = ''
+  for (let i = 0; i < u.length; i += 0x8000) out += String.fromCharCode(...u.subarray(i, i + 0x8000))
+  return btoa(out)
+}
+
 async function encrypt(data: unknown): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await aesKey(), new TextEncoder().encode(JSON.stringify(data))))
-  // base64 em pedaços para não estourar a pilha com arquivos grandes
-  let out = ''
-  for (let i = 0; i < ct.length; i += 0x8000) out += String.fromCharCode(...ct.subarray(i, i + 0x8000))
-  return `${b64(iv)}.${btoa(out)}`
+  return `${b64(iv)}.${bigB64(ct)}`
 }
 
 async function decrypt<T>(payload: string): Promise<T> {
@@ -165,7 +176,7 @@ async function githubSync(token: string, body: Record<string, unknown>) {
   throw new UserError('Ação desconhecida.')
 }
 
-const NFCE_DOWNLOADS_PER_RUN = 20
+const NFCE_DOWNLOADS_PER_RUN = 40
 
 /** Primeiro dia do mês, dois meses atrás (a SEFAZ-SP guarda ~100 dias). */
 function nfceStart(): Date {
@@ -191,6 +202,14 @@ async function syncJobs() {
         .order('competencia', { ascending: false }).order('chave', { ascending: false })
         .limit(NFCE_DOWNLOADS_PER_RUN)
       downloads = (pend ?? []).map((r) => r.chave)
+      if (downloads.length < NFCE_DOWNLOADS_PER_RUN) {
+        // Já processadas mas sem o XML guardado: as mais antigas primeiro (a SEFAZ-SP apaga depois de ~100 dias)
+        const { data: semXml } = await admin.from('nfce_docs').select('chave')
+          .eq('company_id', c.id).eq('baixada', true).is('xml', null).lt('tentativas', 5)
+          .order('dh_emi', { ascending: true })
+          .limit(NFCE_DOWNLOADS_PER_RUN - downloads.length)
+        downloads.push(...(semXml ?? []).map((r) => r.chave))
+      }
     }
     if (!nfeDue && !listDue && !downloads.length) continue
     const { data: row } = await admin.from('company_certs').select('payload').eq('company_id', c.id).maybeSingle()
@@ -263,7 +282,20 @@ async function nfceListIngest(companyId: string, body: Record<string, unknown>) 
   return { done: true, keys: ret.chaves.length }
 }
 
-/** Grava valor/data/cancelamento de uma NFC-e baixada. */
+const NFE_NS = 'http://www.portalfiscal.inf.br/nfe'
+const EVENTO_SEP = '\n<!--evento-->\n'
+
+/** Elementos completos (com a tag de abertura e fechamento) prontos para salvar como arquivo .xml. */
+function xmlElements(xml: string, name: string): string[] {
+  const re = new RegExp(`<((?:[\\w-]+:)?${name})(?=[\\s>/])[^>]*>[\\s\\S]*?</\\1>`, 'g')
+  return [...xml.matchAll(re)].map((m) => {
+    let el = m[0]
+    if (!/^<[^>]*\sxmlns=/.test(el)) el = el.replace(/^<([\w:-]+)/, `<$1 xmlns="${NFE_NS}"`)
+    return '<?xml version="1.0" encoding="UTF-8"?>' + el
+  })
+}
+
+/** Grava XML, valor, data e cancelamento de uma NFC-e baixada. */
 async function nfceXmlIngest(companyId: string, body: Record<string, unknown>) {
   const chave = String(body.chave ?? '')
   const { data: cur } = await admin.from('nfce_docs').select('tentativas').eq('company_id', companyId).eq('chave', chave).maybeSingle()
@@ -292,16 +324,77 @@ async function nfceXmlIngest(companyId: string, body: Record<string, unknown>) {
     }).eq('company_id', companyId).eq('chave', chave)
     return { ok: false, cStat: ret.cStat }
   }
+  const retEl = tag(String(body.response ?? ''), 'retNfceDownloadXML') ?? ''
+  const xml = xmlElements(retEl, 'nfeProc')[0] ?? null
+  const eventos = xmlElements(retEl, 'procEventoNFe')
   const up = await admin.from('nfce_docs').update({
     baixada: true,
     valor: ret.valor,
     dh_emi: ret.dh_emi,
     ...(ret.competencia ? { competencia: ret.competencia } : {}),
     situacao: ret.cancelada ? 'cancelada' : 'autorizada',
+    xml,
+    xml_eventos: eventos.length ? eventos.join(EVENTO_SEP) : null,
+    ...(xml ? {} : { tentativas: cur.tentativas + 1 }),
     updated_at: new Date().toISOString(),
   }).eq('company_id', companyId).eq('chave', chave)
   if (up.error) throw up.error
-  return { ok: true }
+  return { ok: true, xml: !!xml }
+}
+
+// ---------------- XML das NFC-e emitidas (para o contador) ----------------
+
+async function xmlMeses(companyId: string) {
+  const { data, error } = await admin.rpc('nfce_xml_meses', { p_company: companyId })
+  if (error) throw error
+  return { meses: data ?? [] }
+}
+
+interface NfceRow { chave: string; dh_emi: string | null; valor: number | null; situacao: string | null; xml: string | null; xml_eventos: string | null }
+
+async function xmlMes(company: Company, competencia: string) {
+  if (!/^\d{4}-\d{2}$/.test(competencia)) throw new UserError('Mês inválido (use AAAA-MM).')
+  const rows: NfceRow[] = []
+  for (let from = 0; ; from += 200) {
+    const { data, error } = await admin.from('nfce_docs')
+      .select('chave, dh_emi, valor, situacao, xml, xml_eventos')
+      .eq('company_id', company.id).eq('competencia', competencia)
+      .order('chave', { ascending: true }).range(from, from + 199)
+    if (error) throw error
+    rows.push(...((data ?? []) as NfceRow[]))
+    if (!data || data.length < 200) break
+  }
+  if (!rows.length) throw new UserError('Nenhuma NFC-e emitida neste mês.')
+  const files: Record<string, Uint8Array> = {}
+  const csv = ['chave;data_emissao;valor;situacao;xml_no_zip']
+  let comXml = 0
+  for (const r of rows) {
+    if (r.xml) {
+      files[`NFCe/${r.chave}-procNFCe.xml`] = strToU8(r.xml)
+      comXml++
+    }
+    if (r.xml_eventos) {
+      r.xml_eventos.split(EVENTO_SEP).forEach((ev, i) => {
+        files[`Eventos/${r.chave}-procEvento${i ? `-${i + 1}` : ''}.xml`] = strToU8(ev)
+      })
+    }
+    csv.push([
+      r.chave,
+      r.dh_emi ? localMinute(new Date(r.dh_emi)).replace('T', ' ') : '',
+      r.valor != null ? String(r.valor).replace('.', ',') : '',
+      r.situacao ?? '',
+      r.xml ? 'sim' : 'NAO',
+    ].join(';'))
+  }
+  files['resumo.csv'] = strToU8('\uFEFF' + csv.join('\r\n'))
+  const zip = zipSync(files, { level: 6 })
+  return {
+    filename: `NFCe_${company.cnpj}_${competencia}.zip`,
+    base64: bigB64(zip),
+    notas: rows.length,
+    com_xml: comXml,
+    sem_xml: rows.length - comXml,
+  }
 }
 
 /** Grava uma resposta da SEFAZ e diz ao workflow se deve continuar e com qual NSU. */

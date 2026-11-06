@@ -1,6 +1,6 @@
 name: Função NF-e (Supabase)
 
-# Publica a função "nfe" no Supabase sempre que ela mudar.
+# Publica as funções "nfe" e "fechamento-whatsapp" no Supabase sempre que ela mudar.
 # Precisa do segredo SUPABASE_ACCESS_TOKEN no repositório (veja o README).
 
 on:
@@ -34,3 +34,4 @@ jobs:
         run: |
           REF=$(grep -oP "SUPABASE_URL = 'https://\K[a-z0-9]+" src/lib/config.ts)
           supabase functions deploy nfe --project-ref "$REF" --no-verify-jwt --use-api
+          supabase functions deploy fechamento-whatsapp --project-ref "$REF" --no-verify-jwt --use-api
