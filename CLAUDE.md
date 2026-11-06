@@ -24,7 +24,7 @@ O artifact "Onion Cost" no Claude (out/2026) é uma versão antiga e não é mai
 ## Módulos do app
 
 Ingredientes, Receitas, Painel, Delivery (taxas por canal e preço sugerido por app), Empresas / notas
-fiscais (NF-e recebidas e NFC-e emitidas SEFAZ-SP), Fechamentos de caixa (pelo app ou pelo WhatsApp),
+fiscais (total de NF-e recebidas contra o CNPJ e de NFC-e emitidas na SEFAZ-SP — sem guardar XML), Fechamentos de caixa (pelo app ou pelo WhatsApp),
 Checklist com foto, Contagem diária/semanal, Usuários e permissões (master, gerente, equipe).
 
 ## Regras para manter tudo atualizado
@@ -40,6 +40,10 @@ Checklist com foto, Contagem diária/semanal, Usuários e permissões (master, g
 ## Histórico de sincronização
 
 - **06/11/2026** — trazidos do Supabase para o repositório: função `fechamento-whatsapp` (29/10),
-  função `nfe` v7 (guarda XML das NFC-e e gera ZIP mensal, 04/11) e o SQL correspondente
-  (`supabase/whatsapp.sql`, `supabase/nfce_xml.sql`). As telas do app para essas duas funções
-  ainda não existem no repositório.
+  e o SQL das migrações de 29/10 e 04/11 (`supabase/whatsapp.sql`, `supabase/nfce_xml.sql`).
+  A tela do app para ver as mensagens do WhatsApp ainda não existe no repositório.
+- **06/11/2026** — **guardar o XML das NFC-e foi abandonado.** A função `nfe` voltou à versão anterior
+  a 04/11: só consulta as NF-e emitidas contra o CNPJ e o valor/situação das NFC-e emitidas.
+  A versão com XML (v7, no ar de 04/11 a 06/11) fazia cada rodada da SEFAZ passar de 5 min e o
+  token OIDC do GitHub vencia no meio, então a sincronização falhou de 04/11 15h46 até a volta.
+  As colunas `nfce_docs.xml`/`xml_eventos` e a função `nfce_xml_meses` continuam no banco sem uso.

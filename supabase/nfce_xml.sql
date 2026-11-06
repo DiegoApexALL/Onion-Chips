@@ -1,5 +1,7 @@
--- Guardar o XML das NFC-e emitidas e listar por mês (ações "xml-meses" / "xml-mes" da função "nfe").
--- Já aplicado no banco em 04/11/2026 (migrações 20261104183425 a 20261104183822).
+-- ABANDONADO em 06/11/2026: o app não guarda mais o XML das NFC-e (a função "nfe" voltou à versão
+-- anterior, que só registra valor, data e situação). Este SQL continua aqui só porque já foi aplicado
+-- no banco em 04/11/2026 (migrações 20261104183425 a 20261104183822): as colunas xml/xml_eventos e a
+-- função nfce_xml_meses ainda existem, mas nada usa. Não aplicar de novo em banco novo.
 
 alter table public.nfce_docs add column if not exists xml text;
 alter table public.nfce_docs add column if not exists xml_eventos text;
