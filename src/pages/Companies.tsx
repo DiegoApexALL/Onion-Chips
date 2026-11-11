@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import ConfirmButton from '../ConfirmButton'
 import { money } from '../lib/cost'
 import { supabase } from '../lib/store'
+import Custos from './Custos'
 
 const UFS = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO']
 
@@ -101,6 +102,8 @@ export default function Companies({ onError }: { onError: (msg: string) => void 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [aba, setAba] = useState<'empresas' | 'fixo' | 'variavel'>('empresas')
+  const [costCompany, setCostCompany] = useState<string>('')
   const month = currentMonth()
 
   const load = useCallback(async () => {
@@ -187,8 +190,42 @@ export default function Companies({ onError }: { onError: (msg: string) => void 
     await load()
   }
 
+  const abas = (
+    <nav className="day-chips sub-tabs">
+      {([['empresas', 'Empresas'], ['fixo', 'Custos fixos'], ['variavel', 'Custos variáveis']] as const).map(([id, label]) => (
+        <button key={id} type="button" className={`day-chip${aba === id ? ' on' : ''}`} onClick={() => setAba(id)}>{label}</button>
+      ))}
+    </nav>
+  )
+
+  if (aba !== 'empresas') {
+    const empresa = companies.find((c) => c.id === costCompany) ?? companies[0]
+    return (
+      <>
+        {abas}
+        {!empresa ? (
+          <p className="card muted">{loaded ? 'Cadastre uma empresa primeiro, na aba Empresas.' : 'Carregando…'}</p>
+        ) : (
+          <>
+            {companies.length > 1 && (
+              <label className="card">
+                Empresa
+                <select value={empresa.id} onChange={(e) => setCostCompany(e.target.value)}>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
+            )}
+            <Custos tipo={aba} companyId={empresa.id} companyName={empresa.name} faturamento={nfce[empresa.id]?.valor ?? 0}
+              mesLabel={monthLabel(month)} onError={onError} />
+          </>
+        )}
+      </>
+    )
+  }
+
   return (
     <>
+      {abas}
       <form className="card form-grid" onSubmit={submit}>
         <h2 className="full">{editingId ? 'Editar empresa' : 'Nova empresa'}</h2>
         <label className="full">

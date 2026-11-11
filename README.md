@@ -77,6 +77,18 @@ para este repositório. Nada sensível aparece no log.
 Observação: o GitHub pausa agendamentos de repositórios públicos sem atividade por 60
 dias. Se isso acontecer, reative em **Actions → Notas fiscais (SEFAZ) → Enable workflow**.
 
+## Custos fixos e variáveis
+
+Dentro de **Empresas** há as abas **Custos fixos** e **Custos variáveis**, por empresa.
+Cada custo tem descrição, categoria, valor, dia de vencimento, fornecedor, observação e
+pode ser desativado sem apagar. Custos fixos podem ser mensais ou anuais (o anual entra
+dividido por 12). Custos variáveis podem ser em **% do faturamento** (cartão, iFood,
+impostos) ou em **R$ por mês**. O resumo mostra o total fixo do mês, o % variável, o
+**ponto de equilíbrio** (faturamento mínimo para pagar tudo) e compara com as vendas em
+NFC-e do mês.
+
+Para ativar: no Supabase, rode [`supabase/custos.sql`](supabase/custos.sql) no **SQL Editor**.
+
 ## Taxas de delivery (iFood, 99Food, Keeta)
 
 No **Painel**, o card **Taxas de delivery** guarda as taxas de cada app (comissão, pagamento
