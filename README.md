@@ -89,6 +89,23 @@ NFC-e do mês.
 
 Para ativar: no Supabase, rode [`supabase/custos.sql`](supabase/custos.sql) no **SQL Editor**.
 
+## Compras pelas notas fiscais (custo automático dos ingredientes)
+
+A função `nfe` guarda os **itens** de cada NF-e de compra (tabela `nfe_items`). Em
+**Ingredientes → Compras (notas fiscais)** aparecem os produtos comprados de cada fornecedor.
+Ligue cada produto ao ingrediente uma vez (ex.: "CEBOLA CX 20KG" = Cebola, 1 CX = 20 kg; o app
+sugere a conversão pela descrição). Daí em diante o banco atualiza o custo do ingrediente
+a cada compra nova, guarda o histórico (`ingredient_prices`) e o app mostra as mudanças de
+preço e as receitas afetadas.
+
+## Resultado do mês
+
+Em **Empresas → Resultado do mês**: vendas (NFC-e) − custos variáveis − compras (NF-e
+recebidas) − custos fixos, com projeção do mês em andamento, maiores fornecedores e a
+comparação mês a mês.
+
+Para ativar os dois: rode [`supabase/compras.sql`](supabase/compras.sql) no **SQL Editor**.
+
 ## Taxas de delivery (iFood, 99Food, Keeta)
 
 No **Painel**, o card **Taxas de delivery** guarda as taxas de cada app (comissão, pagamento

@@ -3,6 +3,7 @@ import ConfirmButton from '../ConfirmButton'
 import { money } from '../lib/cost'
 import { supabase } from '../lib/store'
 import Custos from './Custos'
+import Resultado from './Resultado'
 
 const UFS = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO']
 
@@ -102,7 +103,7 @@ export default function Companies({ onError }: { onError: (msg: string) => void 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
-  const [aba, setAba] = useState<'empresas' | 'fixo' | 'variavel'>('empresas')
+  const [aba, setAba] = useState<'empresas' | 'resultado' | 'fixo' | 'variavel'>('empresas')
   const [costCompany, setCostCompany] = useState<string>('')
   const month = currentMonth()
 
@@ -192,7 +193,7 @@ export default function Companies({ onError }: { onError: (msg: string) => void 
 
   const abas = (
     <nav className="day-chips sub-tabs">
-      {([['empresas', 'Empresas'], ['fixo', 'Custos fixos'], ['variavel', 'Custos variáveis']] as const).map(([id, label]) => (
+      {([['empresas', 'Empresas'], ['resultado', 'Resultado do mês'], ['fixo', 'Custos fixos'], ['variavel', 'Custos variáveis']] as const).map(([id, label]) => (
         <button key={id} type="button" className={`day-chip${aba === id ? ' on' : ''}`} onClick={() => setAba(id)}>{label}</button>
       ))}
     </nav>
@@ -215,8 +216,12 @@ export default function Companies({ onError }: { onError: (msg: string) => void 
                 </select>
               </label>
             )}
-            <Custos tipo={aba} companyId={empresa.id} companyName={empresa.name} faturamento={nfce[empresa.id]?.valor ?? 0}
-              mesLabel={monthLabel(month)} onError={onError} />
+            {aba === 'resultado' ? (
+              <Resultado companyId={empresa.id} companyName={empresa.name} mesAtual={month} onError={onError} />
+            ) : (
+              <Custos tipo={aba} companyId={empresa.id} companyName={empresa.name} faturamento={nfce[empresa.id]?.valor ?? 0}
+                mesLabel={monthLabel(month)} onError={onError} />
+            )}
           </>
         )}
       </>

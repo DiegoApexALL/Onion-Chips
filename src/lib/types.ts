@@ -9,6 +9,9 @@ export interface Ingredient {
   /** Contagem da loja (só no banco): entra na lista diária / na semanal geral */
   contar_diaria?: boolean
   contar_semanal?: boolean
+  /** Preenchidos pelo banco quando uma nota de compra vinculada atualiza o custo */
+  last_purchase_at?: string | null
+  last_purchase_emit?: string | null
 }
 
 export interface RecipeItem {

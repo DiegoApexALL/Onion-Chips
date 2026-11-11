@@ -3,6 +3,7 @@ import { costPerBase, money, money4, UNITS } from '../lib/cost'
 import ConfirmButton from '../ConfirmButton'
 import { store, supabase } from '../lib/store'
 import type { Ingredient, Recipe, Unit } from '../lib/types'
+import Compras from './Compras'
 
 interface Props {
   ingredients: Ingredient[]
@@ -18,6 +19,7 @@ export default function Ingredients({ ingredients, recipes, reload, onError }: P
   const [form, setForm] = useState(empty)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [aba, setAba] = useState<'lista' | 'compras'>('lista')
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -64,8 +66,25 @@ export default function Ingredients({ ingredients, recipes, reload, onError }: P
     return used.length ? `Usado em: ${used.join(', ')}` : undefined
   }
 
+  const abas = supabase && (
+    <nav className="day-chips sub-tabs">
+      <button type="button" className={`day-chip${aba === 'lista' ? ' on' : ''}`} onClick={() => setAba('lista')}>Ingredientes</button>
+      <button type="button" className={`day-chip${aba === 'compras' ? ' on' : ''}`} onClick={() => setAba('compras')}>Compras (notas fiscais)</button>
+    </nav>
+  )
+
+  if (supabase && aba === 'compras') {
+    return (
+      <>
+        {abas}
+        <Compras ingredients={ingredients} recipes={recipes} reload={reload} onError={onError} />
+      </>
+    )
+  }
+
   return (
     <>
+      {abas}
       <form className="card form-grid" onSubmit={submit}>
         <h2 className="full">{editingId ? 'Editar ingrediente' : 'Novo ingrediente'}</h2>
         <label className="full">
@@ -134,6 +153,11 @@ export default function Ingredients({ ingredients, recipes, reload, onError }: P
                       {i.name}
                       {supabase && i.contar_diaria && <span className="chip chip-low" title="Contagem diária"> Diária</span>}
                       {supabase && i.contar_semanal === false && !i.contar_diaria && <span className="muted small"> · fora da contagem</span>}
+                      {i.last_purchase_at && (
+                        <div className="muted small">
+                          Pela nota de {new Date(i.last_purchase_at).toLocaleDateString('pt-BR')}{i.last_purchase_emit ? ` · ${i.last_purchase_emit}` : ''}
+                        </div>
+                      )}
                     </td>
                     <td className="num">{money(i.package_price)} / {i.package_qty.toLocaleString('pt-BR')} {i.unit}</td>
                     <td className="num">{money4(costPerBase(i))} / {BASE_LABEL[i.unit]}</td>

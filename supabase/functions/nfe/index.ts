@@ -395,6 +395,14 @@ async function saveDocs(sb: SupabaseClient, companyId: string, docs: { nsu: numb
   }
   const up = await sb.from('nfe_docs').upsert([...rows.values()])
   if (up.error) throw up.error
+  // Itens das notas completas (o banco atualiza o custo dos ingredientes vinculados)
+  const items = parsed.flatMap((p) => p.kind === 'nfe' && p.completa ? p.items.map((it) => ({
+    ...it, company_id: companyId, chave: p.chave, emit_doc: p.emit_doc, emit_nome: p.emit_nome, dh_emi: p.dh_emi, competencia: p.competencia,
+  })) : [])
+  for (let i = 0; i < items.length; i += 500) {
+    const ins = await sb.from('nfe_items').upsert(items.slice(i, i + 500), { onConflict: 'company_id,chave,n_item', ignoreDuplicates: true })
+    if (ins.error) console.error(`Itens da NF-e: ${ins.error.message}`) // não trava a sincronização das notas
+  }
   return parsed.filter((p) => p.kind === 'nfe').length
 }
 
