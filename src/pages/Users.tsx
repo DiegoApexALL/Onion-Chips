@@ -134,6 +134,8 @@ export default function Users({ me, onError }: { me: Perfil; onError: (msg: stri
         </ul>
       </section>
 
+      {me.admin_sistema && <Contas me={me} callAdmin={callAdmin} onError={onError} />}
+
       {pinFor && <PinForm user={pinFor} onCancel={() => setPinFor(null)} onSave={(pin) => resetPin(pinFor, pin)} />}
 
       {draft && (
@@ -220,6 +222,100 @@ function PinForm({ user, onCancel, onSave }: { user: Perfil; onCancel: () => voi
         <button className="ghost" onClick={onCancel}>Cancelar</button>
         <button className="primary" disabled={pin.length !== 6} onClick={() => onSave(pin)}>Trocar PIN</button>
       </div>
+    </section>
+  )
+}
+
+interface Conta { id: string; nome: string; created_at: string }
+
+/** Só para o dono do sistema: cria uma conta separada (outro dono) com o master dela. */
+function Contas({ me, callAdmin, onError }: {
+  me: Perfil
+  callAdmin: (body: Record<string, unknown>) => Promise<unknown>
+  onError: (msg: string) => void
+}) {
+  const [contas, setContas] = useState<Conta[]>([])
+  const [form, setForm] = useState<{ conta_nome: string; nome: string; login: string; pin: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [ok, setOk] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    const { data, error } = await supabase!.from('contas').select('id, nome, created_at').order('created_at')
+    if (error) return onError(error.message)
+    setContas((data ?? []) as Conta[])
+  }, [onError])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  async function criar() {
+    if (!form) return
+    if (!form.conta_nome.trim() || !form.nome.trim()) return onError('Informe o nome da conta e do responsável.')
+    setBusy(true)
+    try {
+      await callAdmin({ action: 'create-conta', ...form })
+      setOk(`Conta "${form.conta_nome.trim()}" criada. Login do responsável: ${form.login.trim().toLowerCase()} · PIN: ${form.pin}`)
+      setForm(null)
+      await load()
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="card">
+      <div className="row-between">
+        <h2>Contas ({contas.length})</h2>
+        {!form && (
+          <button className="ghost" onClick={() => { setOk(null); setForm({ conta_nome: '', nome: '', login: '', pin: '' }) }}>+ Nova conta</button>
+        )}
+      </div>
+      <p className="muted small">
+        Cada conta é um negócio separado: empresas, unidades, usuários, ingredientes, receitas, notas e fechamentos de uma
+        conta não aparecem para as outras. O responsável da conta nova entra como master e cadastra o resto.
+      </p>
+      {ok && <div className="hint">{ok}</div>}
+      <ul className="closing-list">
+        {contas.map((c) => (
+          <li key={c.id} className="unit-row">
+            <div>
+              <div className="strong">{c.nome} {c.id === me.conta_id && <span className="chip chip-ok">sua conta</span>}</div>
+              <div className="small muted">criada em {new Date(c.created_at).toLocaleDateString('pt-BR')}</div>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {form && (
+        <div className="form-grid link-form">
+          <label className="full">
+            Nome da conta
+            <input value={form.conta_nome} placeholder="Ex.: Lanchonete do Tio" onChange={(e) => setForm({ ...form, conta_nome: e.target.value })} />
+          </label>
+          <label className="full">
+            Nome do responsável
+            <input value={form.nome} placeholder="Ex.: Tio João" onChange={(e) => setForm({ ...form, nome: e.target.value })} />
+          </label>
+          <label>
+            Usuário (para entrar)
+            <input value={form.login} autoCapitalize="none" placeholder="ex.: joao"
+              onChange={(e) => setForm({ ...form, login: e.target.value.toLowerCase().replace(/\s/g, '') })} />
+          </label>
+          <label>
+            PIN (6 números)
+            <input inputMode="numeric" maxLength={6} value={form.pin} placeholder="000000"
+              onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '').slice(0, 6) })} />
+          </label>
+          <div className="full actions">
+            <button className="ghost" onClick={() => setForm(null)}>Cancelar</button>
+            <button className="primary" disabled={busy || form.pin.length !== 6 || form.login.length < 3} onClick={criar}>
+              {busy ? 'Criando…' : 'Criar conta'}
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

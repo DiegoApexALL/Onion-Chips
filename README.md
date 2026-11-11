@@ -106,6 +106,15 @@ comparação mês a mês.
 
 Para ativar os dois: rode [`supabase/compras.sql`](supabase/compras.sql) no **SQL Editor**.
 
+## Contas separadas (vários donos no mesmo app)
+
+Cada usuário pertence a uma **conta**. Empresas, unidades, usuários, ingredientes, receitas,
+configurações, contagem, checklist, notas, fechamentos e custos de uma conta não aparecem para
+as outras (regras no banco, `supabase/contas.sql`). O master só gerencia a própria conta.
+O dono do sistema (`profiles.admin_sistema`) vê a seção **Usuários → Contas** e cria uma conta
+nova com o responsável (master) dela. O robô de fechamento pelo WhatsApp atende só as contas
+marcadas com `contas.whatsapp`.
+
 ## Taxas de delivery (iFood, 99Food, Keeta)
 
 No **Painel**, o card **Taxas de delivery** guarda as taxas de cada app (comissão, pagamento
