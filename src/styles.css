@@ -301,3 +301,11 @@ input.invalid{border-color:var(--neg);outline-color:var(--neg)}
   .ch-pack { grid-column: 1; }
   .ch-remove { grid-row: auto; grid-column: 2; justify-self: end; }
 }
+.sub-tabs{margin-bottom:12px}
+.cost-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:10px}
+.cost-group{margin-top:12px}
+.cost-group>.small{margin-bottom:4px}
+.cost-list li{flex-wrap:wrap}
+.cost-list .num{white-space:normal;max-width:55%}
+.cost-actions{justify-content:flex-start;flex-basis:100%}
+.cost-actions button{white-space:nowrap}
