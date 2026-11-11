@@ -12,6 +12,10 @@ export interface Perfil {
   modulos: Modulo[]
   unit_ids: string[]
   ativo: boolean
+  /** Conta (dono) a que o usuário pertence: só vê os dados dela */
+  conta_id?: string
+  /** Pode criar contas novas (dono do sistema) */
+  admin_sistema?: boolean
 }
 
 export const MODULOS: { id: Modulo; nome: string; desc: string }[] = [

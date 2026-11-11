@@ -83,12 +83,14 @@ const supabaseStore = (sb: SupabaseClient): Store => ({
     if (error) throw error
   },
   async getSettings() {
-    const { data, error } = await sb.from('settings').select('*').eq('id', 1).maybeSingle()
+    // Uma linha por conta: o banco (RLS) só devolve a da conta de quem está logado
+    const { data, error } = await sb.from('settings').select('*').limit(1).maybeSingle()
     if (error) throw error
     return toSettings(data)
   },
   async saveSettings(settings) {
-    const { error } = await sb.from('settings').upsert({ id: 1, ...settings })
+    // conta_id vem do padrão do banco (conta de quem está logado)
+    const { error } = await sb.from('settings').upsert({ ...settings }, { onConflict: 'conta_id' })
     if (error) throw error
   },
 })
