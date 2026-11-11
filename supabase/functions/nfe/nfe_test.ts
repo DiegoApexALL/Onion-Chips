@@ -67,3 +67,23 @@ Deno.test('NFC-e: listagem, download e datas', () => {
   assertEquals(s.localMinute(new Date('2026-10-14T18:05:00Z')), '2026-10-14T15:05')
   assertEquals(s.fromLocal('2026-10-02T11:30:15').toISOString(), '2026-10-02T14:30:00.000Z')
 })
+
+Deno.test('NF-e completa: itens da nota', async () => {
+  const proc = '<nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe"><NFe><infNFe Id="NFe35261011111111000111550010000001231000001234" versao="4.00">' +
+    '<ide><dhEmi>2026-10-05T10:20:00-03:00</dhEmi></ide><emit><CNPJ>11111111000111</CNPJ><xNome>Ceasa Ltda</xNome></emit>' +
+    '<det nItem="1"><prod><cProd>CEB20</cProd><cEAN>SEM GTIN</cEAN><xProd>CEBOLA AMARELA CX 20KG</xProd><NCM>07031019</NCM><CFOP>5102</CFOP>' +
+    '<uCom>CX</uCom><qCom>3.0000</qCom><vUnCom>100.0000000000</vUnCom><vProd>300.00</vProd><vDesc>15.00</vDesc></prod><imposto/></det>' +
+    '<det nItem="2"><prod><cProd>OL900</cProd><cEAN>7891234567895</cEAN><xProd>OLEO DE SOJA 900ML</xProd><uCom>UN</uCom><qCom>12</qCom>' +
+    '<vUnCom>7.50</vUnCom><vProd>90.00</vProd></prod></det>' +
+    '<total><ICMSTot><vNF>375.00</vNF></ICMSTot></total></infNFe></NFe>' +
+    '<protNFe><infProt><chNFe>35261011111111000111550010000001231000001234</chNFe><cStat>100</cStat></infProt></protNFe></nfeProc>'
+  const doc = s.parseDoc('procNFe_v4.00.xsd', proc)
+  assertEquals(doc?.kind, 'nfe')
+  if (doc?.kind !== 'nfe') return
+  assertEquals([doc.completa, doc.valor, doc.items.length], [true, 375, 2])
+  assertEquals(doc.items[0], {
+    n_item: 1, codigo: 'CEB20', ean: null, descricao: 'CEBOLA AMARELA CX 20KG', ncm: '07031019', cfop: '5102',
+    unidade: 'CX', quantidade: 3, valor_unit: 100, valor_total: 300, desconto: 15,
+  })
+  assertEquals([doc.items[1].ean, doc.items[1].desconto, doc.items[1].ncm], ['7891234567895', 0, null])
+})

@@ -86,8 +86,47 @@ export type ParsedDoc =
       valor: number | null
       situacao: 'autorizada' | 'denegada' | 'cancelada'
       completa: boolean
+      /** Itens da nota (só vêm no XML completo) */
+      items: NfeItem[]
     }
   | { kind: 'cancel'; chave: string }
+
+export interface NfeItem {
+  n_item: number
+  codigo: string | null
+  ean: string | null
+  descricao: string
+  ncm: string | null
+  cfop: string | null
+  unidade: string | null
+  quantidade: number | null
+  valor_unit: number | null
+  valor_total: number | null
+  desconto: number
+}
+
+/** Lê os <det> (produtos) de uma NF-e completa. */
+export function parseItems(inf: string): NfeItem[] {
+  const items: NfeItem[] = []
+  for (const m of inf.matchAll(/<(?:[\w-]+:)?det\s[^>]*nItem="(\d+)"[^>]*>([\s\S]*?)<\/(?:[\w-]+:)?det>/g)) {
+    const prod = tag(m[2], 'prod') ?? ''
+    const ean = text(prod, 'cEAN')
+    items.push({
+      n_item: Number(m[1]),
+      codigo: text(prod, 'cProd'),
+      ean: ean && /^\d{8,14}$/.test(ean) ? ean : null,
+      descricao: text(prod, 'xProd') ?? `Item ${m[1]}`,
+      ncm: text(prod, 'NCM'),
+      cfop: text(prod, 'CFOP'),
+      unidade: text(prod, 'uCom'),
+      quantidade: num(text(prod, 'qCom')),
+      valor_unit: num(text(prod, 'vUnCom')),
+      valor_total: num(text(prod, 'vProd')),
+      desconto: num(text(prod, 'vDesc')) ?? 0,
+    })
+  }
+  return items
+}
 
 const SITUACAO = { '1': 'autorizada', '2': 'denegada', '3': 'cancelada' } as const
 
@@ -118,6 +157,7 @@ export function parseDoc(schema: string, xml: string): ParsedDoc | null {
       valor: num(text(xml, 'vNF')),
       situacao: SITUACAO[(text(xml, 'cSitNFe') ?? '1') as keyof typeof SITUACAO] ?? 'autorizada',
       completa: false,
+      items: [],
     }
   }
   if (schema.startsWith('procNFe')) {
@@ -139,6 +179,7 @@ export function parseDoc(schema: string, xml: string): ParsedDoc | null {
       valor: num(text(total, 'vNF')),
       situacao: cStat && ['110', '301', '302', '303'].includes(cStat) ? 'denegada' : 'autorizada',
       completa: true,
+      items: parseItems(inf),
     }
   }
   if (schema.startsWith('resEvento') || schema.startsWith('procEventoNFe')) {
